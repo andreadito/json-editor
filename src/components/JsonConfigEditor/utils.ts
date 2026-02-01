@@ -294,3 +294,71 @@ export function resolveText(
     return formatResolved(val, fmt, sep);
   });
 }
+
+export interface ResolveConfigOptions {
+  /** Placeholder regex. Defaults to the standard ::: pattern with optional format hints. */
+  pattern?: RegExp;
+  /** Default array format for placeholders without an inline hint. Defaults to 'comma'. */
+  defaultArrayFormat?: ArrayFormat;
+  /** Default custom separator. Defaults to ' | '. */
+  defaultCustomSeparator?: string;
+  /** The key inside each context entry that holds the data. Defaults to 'data'. Set to null for flat context. */
+  dataKey?: string | null;
+}
+
+/**
+ * Deep-resolve an entire config object against a context.
+ *
+ * Walks every value in the config recursively:
+ * - Strings: all placeholders are resolved via `resolveText`
+ * - Objects/arrays: recursed into, preserving structure
+ * - Other primitives (numbers, booleans, null): passed through as-is
+ *
+ * Returns a new object — the original config is never mutated.
+ *
+ * Usage in your downstream application:
+ * ```ts
+ * import { resolveConfig } from './components/JsonConfigEditor';
+ *
+ * const savedConfig = JSON.parse(dbRow.config);
+ * const context = await loadContext();
+ * const finalConfig = resolveConfig(savedConfig, context);
+ * ```
+ */
+export function resolveConfig(
+  config: Record<string, unknown>,
+  context: Record<string, unknown>,
+  options: ResolveConfigOptions = {},
+): Record<string, unknown> {
+  const {
+    pattern = DEFAULT_PLACEHOLDER_REGEX,
+    defaultArrayFormat = 'comma',
+    defaultCustomSeparator = ' | ',
+    dataKey = 'data',
+  } = options;
+
+  function resolveNode(node: unknown): unknown {
+    if (node === null || node === undefined) return node;
+
+    if (typeof node === 'string') {
+      return resolveText(node, context, pattern, defaultArrayFormat, defaultCustomSeparator, dataKey);
+    }
+
+    if (Array.isArray(node)) {
+      return node.map(resolveNode);
+    }
+
+    if (typeof node === 'object') {
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+        result[key] = resolveNode(value);
+      }
+      return result;
+    }
+
+    // numbers, booleans — pass through
+    return node;
+  }
+
+  return resolveNode(config) as Record<string, unknown>;
+}
