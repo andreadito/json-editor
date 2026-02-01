@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSON Config Editor with Smart Text Fields</title>
+  
+  <!-- React -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  
+  <!-- CodeMirror -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css">
+  
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #0a0a0b;
+      color: #e0e0e0;
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* Header */
+    .app-header {
+      background: #111113;
+      border-bottom: 1px solid #222228;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .app-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .app-title-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .header-btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: none;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .header-btn-secondary {
+      background: #1e1e24;
+      color: #a0a0a8;
+      border: 1px solid #2a2a32;
+    }
+
+    .header-btn-secondary:hover {
+      background: #252530;
+      color: #fff;
+    }
+
+    .header-btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: #fff;
+    }
+
+    .header-btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    /* Main Layout */
+    .editor-layout {
+      display: grid;
+      grid-template-columns: 300px 1fr 380px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: #0e0e10;
+      border-right: 1px solid #1a1a1f;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid #1a1a1f;
+    }
+
+    .sidebar-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #6366f1;
+      margin-bottom: 4px;
+    }
+
+    .sidebar-subtitle {
+      font-size: 13px;
+      color: #707078;
+    }
+    
+    .filter-tabs {
+      display: flex;
+      padding: 0 12px 12px 12px;
+      gap: 6px;
+      border-bottom: 1px solid #1a1a1f;
+    }
+    
+    .filter-tab {
+      flex: 1;
+      padding: 8px 12px;
+      background: #141418;
+      border: 1px solid #1e1e24;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #707078;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: 'DM Sans', sans-serif;
+    }
+    
+    .filter-tab:hover {
+      background: #1a1a1f;
+      color: #a0a0a8;
+    }
+    
+    .filter-tab.active {
+      background: linear-gradient(135deg, #6366f120 0%, #8b5cf620 100%);
+      border-color: #6366f140;
+      color: #a78bfa;
+    }
+    
+    .no-fields {
+      text-align: center;
+      padding: 40px 20px;
+      color: #505058;
+      font-size: 13px;
+    }
+    
+    /* Search input */
+    .search-wrapper {
+      padding: 0 12px 12px 12px;
+      position: relative;
+    }
+    
+    .search-icon {
+      position: absolute;
+      left: 24px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 12px;
+      opacity: 0.5;
+      pointer-events: none;
+      margin-top: -6px;
+    }
+    
+    .search-input {
+      width: 100%;
+      padding: 10px 36px 10px 36px;
+      background: #141418;
+      border: 1px solid #1e1e24;
+      border-radius: 8px;
+      color: #e0e0e8;
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    
+    .search-input:focus {
+      border-color: #6366f1;
+      background: #18181c;
+    }
+    
+    .search-input::placeholder {
+      color: #505058;
+    }
+    
+    .search-clear {
+      position: absolute;
+      right: 24px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #2a2a32;
+      border: none;
+      color: #808088;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: -6px;
+      transition: all 0.15s ease;
+    }
+    
+    .search-clear:hover {
+      background: #6366f1;
+      color: #fff;
+    }
+    
+    /* Clickable keys in CodeMirror */
+    .cm-clickable-key {
+      cursor: pointer !important;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 3px;
+      border-radius: 3px;
+      transition: all 0.15s ease;
+    }
+    
+    .cm-clickable-key:hover {
+      background: #6366f130 !important;
+      text-decoration-style: solid;
+      text-decoration-color: #6366f1;
+    }
+
+    .field-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .field-card {
+      background: #141418;
+      border: 1px solid #1e1e24;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .field-card:hover {
+      border-color: #2a2a32;
+      background: #18181c;
+      transform: translateY(-1px);
+    }
+
+    .field-card.selected {
+      border-color: #6366f1;
+      background: linear-gradient(135deg, #6366f108 0%, #8b5cf608 100%);
+      box-shadow: 0 0 24px #6366f115;
+    }
+
+    .field-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .field-key {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: #a78bfa;
+    }
+
+    .placeholder-count {
+      font-size: 10px;
+      background: linear-gradient(135deg, #6366f120 0%, #8b5cf620 100%);
+      color: #a78bfa;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .field-card-preview {
+      font-size: 12px;
+      color: #707078;
+      line-height: 1.6;
+      max-height: 52px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .field-card-path {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #404048;
+    }
+    
+    .field-badges {
+      display: flex;
+      gap: 6px;
+    }
+    
+    .field-badge {
+      font-size: 9px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .badge-long {
+      background: #fbbf2420;
+      color: #fbbf24;
+    }
+    
+    .badge-vars {
+      background: linear-gradient(135deg, #6366f120 0%, #8b5cf620 100%);
+      color: #a78bfa;
+    }
+    
+    .field-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 2px;
+    }
+    
+    .field-edit-hint {
+      font-size: 10px;
+      color: #505058;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    
+    .field-card:hover .field-edit-hint {
+      opacity: 1;
+      color: #6366f1;
+    }
+
+    /* Main Editor */
+    .main-editor {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #0c0c0e;
+    }
+
+    .main-editor-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid #1a1a1f;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0e0e10;
+    }
+
+    .editor-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #909098;
+    }
+    
+    .editor-title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .editor-hint {
+      font-size: 11px;
+      color: #505058;
+      font-style: italic;
+    }
+
+    .editor-badge {
+      font-size: 10px;
+      background: #1a1a1f;
+      color: #606068;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .editor-status {
+      display: flex;
+      align-items: center;
+    }
+    
+    .badge-valid {
+      background: #10b98120;
+      color: #10b981;
+    }
+    
+    .badge-error {
+      background: #ef444420;
+      color: #ef4444;
+    }
+    
+    .json-error-bar {
+      background: #ef444415;
+      border-bottom: 1px solid #ef444430;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: #ef4444;
+    }
+    
+    .error-icon {
+      font-size: 14px;
+    }
+    
+    .error-message {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    
+    .json-textarea.has-error {
+      border-left: 3px solid #ef4444;
+    }
+
+    .json-editor-wrapper {
+      flex: 1;
+      overflow: auto;
+      position: relative;
+    }
+
+    .json-textarea {
+      width: 100%;
+      height: 100%;
+      background: #0c0c0e;
+      border: none;
+      padding: 20px;
+      color: #c8c8d0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      resize: none;
+      outline: none;
+    }
+
+    .json-textarea::selection {
+      background: #6366f130;
+    }
+
+    /* Field Editor Panel */
+    .field-editor-panel {
+      background: #0e0e10;
+      border-left: 1px solid #1a1a1f;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #1a1a1f 0%, #141418 100%);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+      border: 1px solid #222228;
+    }
+
+    .empty-title {
+      font-size: 15px;
+      color: #808088;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .empty-subtitle {
+      font-size: 13px;
+      color: #505058;
+      line-height: 1.6;
+    }
+
+    .field-editor {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .field-editor-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #1a1a1f;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #111113;
+    }
+
+    .field-path {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .path-icon {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .path-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #a78bfa;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .editor-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: none;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: #707078;
+      border: 1px solid #2a2a32;
+    }
+
+    .btn-ghost:hover {
+      background: #1a1a1f;
+      color: #a0a0a8;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+    
+    .btn-primary:disabled {
+      background: #2a2a32;
+      color: #505058;
+      cursor: not-allowed;
+    }
+    
+    .btn-primary-pulse {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: #fff;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+    }
+    
+    .unsaved-badge {
+      background: #f59e0b20;
+      color: #f59e0b;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    
+    .saved-badge {
+      background: #10b98120;
+      color: #10b981;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+      white-space: nowrap;
+      animation: fadeIn 0.2s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .changes-hint {
+      background: #6366f110;
+      border: 1px solid #6366f130;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: #a0a0a8;
+    }
+    
+    .hint-icon {
+      font-size: 14px;
+    }
+    
+    /* CodeMirror customizations */
+    .codemirror-wrapper {
+      height: 100%;
+    }
+    
+    .codemirror-wrapper .CodeMirror {
+      height: 100%;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      background: #0c0c0e;
+    }
+    
+    .codemirror-wrapper.has-error .CodeMirror {
+      border-left: 3px solid #ef4444;
+    }
+    
+    .CodeMirror-gutters {
+      background: #0c0c0e;
+      border-right: 1px solid #1a1a1f;
+    }
+    
+    .CodeMirror-linenumber {
+      color: #404048;
+    }
+    
+    .CodeMirror-foldgutter {
+      width: 16px;
+    }
+    
+    .CodeMirror-foldgutter-open,
+    .CodeMirror-foldgutter-folded {
+      color: #505058;
+      cursor: pointer;
+    }
+    
+    .CodeMirror-foldgutter-open:hover,
+    .CodeMirror-foldgutter-folded:hover {
+      color: #a0a0a8;
+    }
+
+    .field-editor-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .editor-section {
+      margin-bottom: 20px;
+    }
+
+    .section-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #505058;
+      margin-bottom: 10px;
+    }
+
+    .text-editor {
+      width: 100%;
+      background: #141418;
+      border: 1px solid #222228;
+      border-radius: 10px;
+      padding: 16px;
+      color: #e0e0e8;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      resize: vertical;
+      min-height: 160px;
+      transition: all 0.15s ease;
+      outline: none;
+    }
+
+    .text-editor:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px #6366f115;
+    }
+
+    .placeholder-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .toolbar-label {
+      font-size: 11px;
+      color: #505058;
+      font-weight: 500;
+    }
+
+    .placeholder-suggestions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .placeholder-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: #141418;
+      border: 1px solid #222228;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 11px;
+      color: #808088;
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all 0.15s ease;
+    }
+
+    .placeholder-btn:hover {
+      background: #1a1a1f;
+      color: #a78bfa;
+      border-color: #6366f140;
+    }
+
+    .placeholder-btn-icon {
+      color: #6366f1;
+      font-size: 10px;
+    }
+
+    .detected-placeholders {
+      background: #141418;
+      border: 1px solid #1e1e24;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .detected-label {
+      font-size: 11px;
+      color: #505058;
+      display: block;
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .placeholder-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .placeholder-tag {
+      background: linear-gradient(135deg, #6366f115 0%, #8b5cf615 100%);
+      border: 1px solid #6366f130;
+      color: #a78bfa;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .preview-section {
+      background: #141418;
+      border: 1px solid #1e1e24;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .preview-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid #1e1e24;
+      transition: background 0.15s ease;
+    }
+
+    .preview-header:hover {
+      background: #18181c;
+    }
+
+    .preview-toggle {
+      font-size: 10px;
+      color: #505058;
+      transition: transform 0.2s ease;
+    }
+
+    .preview-toggle.open {
+      transform: rotate(90deg);
+    }
+
+    .preview-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #505058;
+    }
+
+    .preview-content {
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.8;
+      color: #a0a0a8;
+    }
+
+    .text-part {
+      color: #a0a0a8;
+    }
+
+    .placeholder-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: linear-gradient(135deg, #6366f118 0%, #8b5cf618 100%);
+      border: 1px solid #6366f140;
+      border-radius: 5px;
+      padding: 3px 10px;
+      margin: 0 3px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #a78bfa;
+      white-space: nowrap;
+    }
+
+    .chip-icon {
+      font-size: 8px;
+      color: #6366f1;
+    }
+
+    /* Output Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .modal {
+      background: #111113;
+      border: 1px solid #222228;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 700px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #1e1e24;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      background: #1a1a1f;
+      border: 1px solid #2a2a32;
+      border-radius: 8px;
+      color: #707078;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      transition: all 0.15s ease;
+    }
+
+    .modal-close:hover {
+      background: #222228;
+      color: #fff;
+    }
+
+    .modal-body {
+      flex: 1;
+      overflow: auto;
+      padding: 20px 24px;
+    }
+
+    .output-textarea {
+      width: 100%;
+      height: 300px;
+      background: #0c0c0e;
+      border: 1px solid #222228;
+      border-radius: 10px;
+      padding: 16px;
+      color: #c8c8d0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      resize: none;
+      outline: none;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #1e1e24;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #0a0a0b;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #2a2a32;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a3a42;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    const { useState, useMemo, useCallback } = React;
+
+    // Sample config with variety of string fields including special characters
+    const initialConfig = {
+      method: "POST",
+      url: "/api/webhook",
+      timeout: "30s",
+      retryPolicy: "exponential",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer :::auth.token",
+        "X-Request-ID": ":::request.id"
+      },
+      body: {
+        message: "Hello :::user.firstName! Your order #:::order.id has been confirmed. We'll deliver to :::user.address.street, :::user.address.city by :::delivery.estimatedDate. Thank you for shopping with us!",
+        subject: "Order Confirmation",
+        mathExample: "Calculate: 5 + 3 - 2 * 4 / 2 = 6. Also 100% of $50.00 is $50.00",
+        codeSnippet: "Use `const x = 'hello'` or `let y = \"world\"` in your code. Template: `${value}`",
+        specialChars: "Quotes: 'single' and \"double\" and `backticks`. Symbols: @#$%^&*()[]{}|\\/<>~",
+        unicodeText: "Emojis: 🎉 ✓ → ← © ® ™ • … — – £ € ¥ ñ ü ö",
+        multilineNote: "Line 1: First item\nLine 2: Second item\nLine 3: Third item with\ttab",
+        footer: "This is an automated message. Please do not reply directly to this email.",
+        metadata: {
+          timestamp: ":::system.currentTime",
+          source: "webhook-service",
+          version: "2.1.0",
+          nested: {
+            level3: {
+              deepValue: "This is a deeply nested string at level 3",
+              anotherDeep: "Another :::deep.placeholder here"
+            }
+          }
+        },
+        recipients: [
+          { name: "Primary", email: ":::recipient.primary.email" },
+          { name: "CC", email: ":::recipient.cc.email" }
+        ]
+      },
+      errorHandling: {
+        fallbackMessage: "We encountered an issue processing your request. Please try again later.",
+        notifyEmail: "alerts@example.com",
+        escalation: {
+          level1: {
+            contact: "support@example.com",
+            message: "Level 1 escalation for :::error.code"
+          },
+          level2: {
+            contact: "engineering@example.com", 
+            message: "Critical: :::error.details requires immediate attention"
+          }
+        }
+      }
+    };
+
+    // Placeholder pattern
+    const PLACEHOLDER_REGEX = /:::([\w.]+)/g;
+
+    // Check if a value is a string (all strings can be edited)
+    const isEditableString = (value) => {
+      return typeof value === "string";
+    };
+    
+    // Check if a string has placeholders (for highlighting in sidebar)
+    const hasPlaceholders = (value) => {
+      if (typeof value !== "string") return false;
+      return PLACEHOLDER_REGEX.test(value);
+    };
+    
+    // Check if string is "long" (for priority display)
+    const isLongString = (value) => {
+      if (typeof value !== "string") return false;
+      return value.length > 50 || value.includes("\\n");
+    };
+
+    // Set value at path immutably (supports both objects and arrays)
+    const setValueAtPath = (obj, path, value) => {
+      const keys = path.split(".");
+      const result = JSON.parse(JSON.stringify(obj));
+      let current = result;
+      for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        // Handle array indices (numeric keys)
+        current = current[isNaN(key) ? key : parseInt(key, 10)];
+      }
+      const finalKey = keys[keys.length - 1];
+      current[isNaN(finalKey) ? finalKey : parseInt(finalKey, 10)] = value;
+      return result;
+    };
+
+    // Find ALL string fields in the config (including arrays)
+    const findEditableFields = (obj, path = "") => {
+      const fields = [];
+      
+      if (Array.isArray(obj)) {
+        obj.forEach((item, index) => {
+          const currentPath = path ? `${path}.${index}` : `${index}`;
+          if (typeof item === "string") {
+            fields.push({ 
+              path: currentPath, 
+              value: item, 
+              key: `[${index}]`,
+              hasPlaceholders: hasPlaceholders(item),
+              isLong: isLongString(item)
+            });
+          } else if (typeof item === "object" && item !== null) {
+            fields.push(...findEditableFields(item, currentPath));
+          }
+        });
+      } else {
+        for (const [key, value] of Object.entries(obj)) {
+          const currentPath = path ? `${path}.${key}` : key;
+          if (typeof value === "string") {
+            fields.push({ 
+              path: currentPath, 
+              value, 
+              key,
+              hasPlaceholders: hasPlaceholders(value),
+              isLong: isLongString(value)
+            });
+          } else if (typeof value === "object" && value !== null) {
+            fields.push(...findEditableFields(value, currentPath));
+          }
+        }
+      }
+      return fields;
+    };
+    
+    // CodeMirror React Wrapper Component with clickable field keys
+    const JsonCodeMirror = ({ value, onChange, hasError, editableFields, onFieldClick }) => {
+      const editorRef = React.useRef(null);
+      const cmInstanceRef = React.useRef(null);
+      const isInternalChange = React.useRef(false);
+      const markersRef = React.useRef([]);
+      
+      // Find positions of field keys in JSON text and mark them
+      const updateMarkers = useCallback((cm, fields) => {
+        // Clear existing markers
+        markersRef.current.forEach(marker => marker.clear());
+        markersRef.current = [];
+        
+        const text = cm.getValue();
+        
+        fields.forEach(field => {
+          // Find the key in the JSON - look for "key": pattern
+          const keyPattern = new RegExp(`"(${field.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})"\\s*:`);
+          const lines = text.split('\n');
+          
+          for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+            const line = lines[lineNum];
+            const match = line.match(keyPattern);
+            if (match) {
+              const startCh = line.indexOf(`"${field.key}"`);
+              if (startCh !== -1) {
+                const from = { line: lineNum, ch: startCh };
+                const to = { line: lineNum, ch: startCh + field.key.length + 2 }; // +2 for quotes
+                
+                const marker = cm.markText(from, to, {
+                  className: 'cm-clickable-key',
+                  attributes: { 'data-path': field.path, title: `Click to edit: ${field.path}` }
+                });
+                markersRef.current.push(marker);
+              }
+            }
+          }
+        });
+      }, []);
+      
+      // Initialize CodeMirror
+      React.useEffect(() => {
+        if (editorRef.current && !cmInstanceRef.current) {
+          cmInstanceRef.current = CodeMirror(editorRef.current, {
+            value: value,
+            mode: { name: "javascript", json: true },
+            theme: "material-darker",
+            lineNumbers: true,
+            matchBrackets: true,
+            autoCloseBrackets: true,
+            foldGutter: true,
+            gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+            tabSize: 2,
+            indentWithTabs: false,
+            lineWrapping: false
+          });
+          
+          cmInstanceRef.current.on("change", (cm) => {
+            if (!isInternalChange.current) {
+              onChange(cm.getValue());
+            }
+          });
+          
+          // Handle clicks on marked text
+          cmInstanceRef.current.getWrapperElement().addEventListener("click", (e) => {
+            if (e.target.classList.contains("cm-clickable-key")) {
+              const path = e.target.getAttribute("data-path");
+              if (path && onFieldClick) {
+                onFieldClick(path);
+              }
+            }
+          });
+          
+          // Initial markers
+          if (editableFields && editableFields.length > 0) {
+            updateMarkers(cmInstanceRef.current, editableFields);
+          }
+        }
+        
+        return () => {
+          if (cmInstanceRef.current) {
+            cmInstanceRef.current.toTextArea();
+            cmInstanceRef.current = null;
+          }
+        };
+      }, []);
+      
+      // Update value from outside (e.g., when field editor saves)
+      React.useEffect(() => {
+        if (cmInstanceRef.current) {
+          const currentValue = cmInstanceRef.current.getValue();
+          if (currentValue !== value) {
+            isInternalChange.current = true;
+            const cursor = cmInstanceRef.current.getCursor();
+            const scrollInfo = cmInstanceRef.current.getScrollInfo();
+            cmInstanceRef.current.setValue(value);
+            cmInstanceRef.current.setCursor(cursor);
+            cmInstanceRef.current.scrollTo(scrollInfo.left, scrollInfo.top);
+            isInternalChange.current = false;
+          }
+        }
+      }, [value]);
+      
+      // Update markers when fields change
+      React.useEffect(() => {
+        if (cmInstanceRef.current && editableFields) {
+          // Small delay to ensure value is updated first
+          setTimeout(() => {
+            updateMarkers(cmInstanceRef.current, editableFields);
+          }, 50);
+        }
+      }, [editableFields, value, updateMarkers]);
+      
+      return React.createElement("div", { 
+        ref: editorRef, 
+        className: `codemirror-wrapper ${hasError ? 'has-error' : ''}`
+      });
+    };
+
+    // Render text with highlighted placeholders
+    const PlaceholderHighlighter = ({ text }) => {
+      const parts = [];
+      let lastIndex = 0;
+      let match;
+      const regex = new RegExp(PLACEHOLDER_REGEX);
+
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(
+            React.createElement("span", { key: lastIndex, className: "text-part" },
+              text.slice(lastIndex, match.index)
+            )
+          );
+        }
+        parts.push(
+          React.createElement("span", { key: match.index, className: "placeholder-chip" },
+            React.createElement("span", { className: "chip-icon" }, "◆"),
+            match[1]
+          )
+        );
+        lastIndex = regex.lastIndex;
+      }
+
+      if (lastIndex < text.length) {
+        parts.push(
+          React.createElement("span", { key: lastIndex, className: "text-part" },
+            text.slice(lastIndex)
+          )
+        );
+      }
+
+      return React.createElement(React.Fragment, null, ...parts);
+    };
+
+    // Text Field Editor Panel
+    const TextFieldEditor = ({ path, value, onSave, onCancel }) => {
+      const [editValue, setEditValue] = useState(value);
+      const [showPreview, setShowPreview] = useState(true);
+      const [justSaved, setJustSaved] = useState(false);
+      
+      // Reset editValue when a different field is selected or value changes
+      React.useEffect(() => {
+        setEditValue(value);
+        setJustSaved(false);
+      }, [path, value]);
+      
+      const hasChanges = editValue !== value;
+      
+      const handleSave = () => {
+        onSave(editValue);
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 2000);
+      };
+
+      const placeholders = useMemo(() => {
+        const matches = [...editValue.matchAll(PLACEHOLDER_REGEX)];
+        return [...new Set(matches.map((m) => m[1]))];
+      }, [editValue]);
+
+      const insertPlaceholder = (name) => {
+        setEditValue((prev) => prev + `:::${name}`);
+      };
+
+      const quickPlaceholders = ["user.name", "user.email", "data.id", "system.date"];
+
+      return React.createElement("div", { className: "field-editor" },
+        React.createElement("div", { className: "field-editor-header" },
+          React.createElement("div", { className: "field-path" },
+            React.createElement("span", { className: "path-icon" }, "✎"),
+            React.createElement("span", { className: "path-text" }, path),
+            hasChanges && React.createElement("span", { className: "unsaved-badge" }, "Unsaved"),
+            justSaved && !hasChanges && React.createElement("span", { className: "saved-badge" }, "✓ Saved")
+          ),
+          React.createElement("div", { className: "editor-actions" },
+            React.createElement("button", { className: "btn btn-ghost", onClick: onCancel }, "Cancel"),
+            React.createElement("button", { 
+              className: `btn ${hasChanges ? 'btn-primary-pulse' : 'btn-primary'}`, 
+              onClick: handleSave,
+              disabled: !hasChanges
+            }, hasChanges ? "⟳ Apply to JSON" : "No Changes")
+          )
+        ),
+        React.createElement("div", { className: "field-editor-body" },
+          React.createElement("div", { className: "editor-section" },
+            React.createElement("label", { className: "section-label" }, "Edit Value"),
+            React.createElement("textarea", {
+              className: "text-editor",
+              value: editValue,
+              onChange: (e) => setEditValue(e.target.value),
+              placeholder: "Enter your text with placeholders like :::data.field"
+            })
+          ),
+          hasChanges && React.createElement("div", { className: "changes-hint" },
+            React.createElement("span", { className: "hint-icon" }, "💡"),
+            React.createElement("span", null, "Click \"Apply to JSON\" to update the JSON in the middle panel")
+          ),
+          React.createElement("div", { className: "placeholder-toolbar" },
+            React.createElement("span", { className: "toolbar-label" }, "Quick Insert:"),
+            React.createElement("div", { className: "placeholder-suggestions" },
+              ...quickPlaceholders.map((p) =>
+                React.createElement("button", {
+                  key: p,
+                  className: "placeholder-btn",
+                  onClick: () => insertPlaceholder(p)
+                },
+                  React.createElement("span", { className: "placeholder-btn-icon" }, "◆"),
+                  p
+                )
+              )
+            )
+          ),
+          placeholders.length > 0 && React.createElement("div", { className: "detected-placeholders" },
+            React.createElement("span", { className: "detected-label" }, "Detected Placeholders:"),
+            React.createElement("div", { className: "placeholder-list" },
+              ...placeholders.map((p) =>
+                React.createElement("span", { key: p, className: "placeholder-tag" }, p)
+              )
+            )
+          ),
+          React.createElement("div", { className: "preview-section" },
+            React.createElement("div", { className: "preview-header", onClick: () => setShowPreview(!showPreview) },
+              React.createElement("span", { className: `preview-toggle ${showPreview ? 'open' : ''}` }, "▶"),
+              React.createElement("span", { className: "preview-label" }, "Preview")
+            ),
+            showPreview && React.createElement("div", { className: "preview-content" },
+              React.createElement(PlaceholderHighlighter, { text: editValue })
+            )
+          )
+        )
+      );
+    };
+
+    // Field Card for the sidebar
+    const FieldCard = ({ field, isSelected, onClick }) => {
+      const truncated = field.value.length > 70 ? field.value.slice(0, 70) + "..." : field.value;
+      const placeholderCount = (field.value.match(PLACEHOLDER_REGEX) || []).length;
+
+      return React.createElement("div", {
+        className: `field-card ${isSelected ? "selected" : ""}`,
+        onClick
+      },
+        React.createElement("div", { className: "field-card-header" },
+          React.createElement("span", { className: "field-key" }, field.key),
+          React.createElement("div", { className: "field-badges" },
+            field.isLong && React.createElement("span", { className: "field-badge badge-long" }, "long"),
+            placeholderCount > 0 && React.createElement("span", { className: "field-badge badge-vars" }, `${placeholderCount} vars`)
+          )
+        ),
+        React.createElement("div", { className: "field-card-preview" },
+          field.hasPlaceholders 
+            ? React.createElement(PlaceholderHighlighter, { text: truncated })
+            : React.createElement("span", { className: "text-part" }, truncated)
+        ),
+        React.createElement("div", { className: "field-card-footer" },
+          React.createElement("span", { className: "field-card-path" }, field.path),
+          React.createElement("span", { className: "field-edit-hint" }, "Click to edit")
+        )
+      );
+    };
+
+    // Output Modal
+    const OutputModal = ({ config, onClose }) => {
+      const output = JSON.stringify(config);
+      
+      const copyToClipboard = () => {
+        navigator.clipboard.writeText(output);
+      };
+
+      return React.createElement("div", { className: "modal-overlay", onClick: onClose },
+        React.createElement("div", { className: "modal", onClick: (e) => e.stopPropagation() },
+          React.createElement("div", { className: "modal-header" },
+            React.createElement("span", { className: "modal-title" }, "Stringified Output"),
+            React.createElement("button", { className: "modal-close", onClick: onClose }, "×")
+          ),
+          React.createElement("div", { className: "modal-body" },
+            React.createElement("textarea", {
+              className: "output-textarea",
+              value: output,
+              readOnly: true
+            })
+          ),
+          React.createElement("div", { className: "modal-footer" },
+            React.createElement("button", { className: "btn btn-ghost", onClick: onClose }, "Close"),
+            React.createElement("button", { className: "btn btn-primary", onClick: copyToClipboard }, "Copy to Clipboard")
+          )
+        )
+      );
+    };
+
+    // Main Component
+    const JsonConfigEditor = () => {
+      const [config, setConfig] = useState(initialConfig);
+      const [selectedField, setSelectedField] = useState(null);
+      const [showOutput, setShowOutput] = useState(false);
+      const [filter, setFilter] = useState("all"); // "all", "placeholders", "long"
+      const [searchQuery, setSearchQuery] = useState("");
+      const [jsonError, setJsonError] = useState(null);
+      const [jsonText, setJsonText] = useState(() => JSON.stringify(initialConfig, null, 2));
+
+      const editableFields = useMemo(() => findEditableFields(config), [config]);
+      
+      // Filter by type and search query
+      const filteredFields = useMemo(() => {
+        let fields = editableFields;
+        
+        // Filter by type
+        if (filter === "placeholders") {
+          fields = fields.filter(f => f.hasPlaceholders);
+        } else if (filter === "long") {
+          fields = fields.filter(f => f.isLong);
+        }
+        
+        // Filter by search query
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase();
+          fields = fields.filter(f => 
+            f.key.toLowerCase().includes(query) ||
+            f.path.toLowerCase().includes(query) ||
+            f.value.toLowerCase().includes(query)
+          );
+        }
+        
+        return fields;
+      }, [editableFields, filter, searchQuery]);
+      
+      const fieldCounts = useMemo(() => ({
+        all: editableFields.length,
+        placeholders: editableFields.filter(f => f.hasPlaceholders).length,
+        long: editableFields.filter(f => f.isLong).length
+      }), [editableFields]);
+      
+      // Sync jsonText when config changes (e.g., from field editor)
+      const updateJsonText = useCallback(() => {
+        setJsonText(JSON.stringify(config, null, 2));
+        setJsonError(null);
+      }, [config]);
+      
+      // Update text when config changes from field editor
+      React.useEffect(() => {
+        setJsonText(JSON.stringify(config, null, 2));
+        setJsonError(null);
+      }, [config]);
+
+      const handleJsonChange = useCallback((text) => {
+        setJsonText(text);
+        try {
+          const parsed = JSON.parse(text);
+          setConfig(parsed);
+          setJsonError(null);
+        } catch (err) {
+          setJsonError(err.message);
+        }
+      }, []);
+
+      const handleFieldSave = useCallback((newValue) => {
+        if (selectedField) {
+          setConfig((prev) => setValueAtPath(prev, selectedField.path, newValue));
+          // Don't clear selectedField - keep the panel open with updated value
+        }
+      }, [selectedField]);
+
+      return React.createElement("div", { className: "app-container" },
+        // Header
+        React.createElement("div", { className: "app-header" },
+          React.createElement("div", { className: "app-title" },
+            React.createElement("span", { className: "app-title-icon" }, "{ }"),
+            "JSON Config Editor"
+          ),
+          React.createElement("div", { className: "header-actions" },
+            React.createElement("button", {
+              className: "header-btn header-btn-secondary",
+              onClick: () => setConfig(initialConfig)
+            }, "Reset"),
+            React.createElement("button", {
+              className: "header-btn header-btn-primary",
+              onClick: () => setShowOutput(true)
+            }, "Get Stringified Output")
+          )
+        ),
+
+        // Main Layout
+        React.createElement("div", { className: "editor-layout" },
+          // Sidebar
+          React.createElement("div", { className: "sidebar" },
+            React.createElement("div", { className: "sidebar-header" },
+              React.createElement("div", { className: "sidebar-title" }, "String Fields"),
+              React.createElement("div", { className: "sidebar-subtitle" },
+                `${editableFields.length} editable field${editableFields.length !== 1 ? "s" : ""}`
+              )
+            ),
+            React.createElement("div", { className: "search-wrapper" },
+              React.createElement("span", { className: "search-icon" }, "🔍"),
+              React.createElement("input", {
+                type: "text",
+                className: "search-input",
+                placeholder: "Search fields...",
+                value: searchQuery,
+                onChange: (e) => setSearchQuery(e.target.value)
+              }),
+              searchQuery && React.createElement("button", {
+                className: "search-clear",
+                onClick: () => setSearchQuery("")
+              }, "×")
+            ),
+            React.createElement("div", { className: "filter-tabs" },
+              React.createElement("button", {
+                className: `filter-tab ${filter === "all" ? "active" : ""}`,
+                onClick: () => setFilter("all")
+              }, `All (${fieldCounts.all})`),
+              React.createElement("button", {
+                className: `filter-tab ${filter === "placeholders" ? "active" : ""}`,
+                onClick: () => setFilter("placeholders")
+              }, `Vars (${fieldCounts.placeholders})`),
+              React.createElement("button", {
+                className: `filter-tab ${filter === "long" ? "active" : ""}`,
+                onClick: () => setFilter("long")
+              }, `Long (${fieldCounts.long})`)
+            ),
+            React.createElement("div", { className: "field-list" },
+              filteredFields.length === 0
+                ? React.createElement("div", { className: "no-fields" }, 
+                    searchQuery ? `No fields match "${searchQuery}"` : "No fields match this filter"
+                  )
+                : filteredFields.map((field) =>
+                    React.createElement(FieldCard, {
+                      key: field.path,
+                      field,
+                      isSelected: selectedField?.path === field.path,
+                      onClick: () => setSelectedField(field)
+                    })
+                  )
+            )
+          ),
+
+          // Main Editor
+          React.createElement("div", { className: "main-editor" },
+            React.createElement("div", { className: "main-editor-header" },
+              React.createElement("div", { className: "editor-title-group" },
+                React.createElement("span", { className: "editor-title" }, "JSON Configuration"),
+                React.createElement("span", { className: "editor-hint" }, "Click underlined keys to edit")
+              ),
+              React.createElement("div", { className: "editor-status" },
+                jsonError 
+                  ? React.createElement("span", { className: "editor-badge badge-error" }, "Invalid JSON")
+                  : React.createElement("span", { className: "editor-badge badge-valid" }, "Valid JSON")
+              )
+            ),
+            jsonError && React.createElement("div", { className: "json-error-bar" },
+              React.createElement("span", { className: "error-icon" }, "⚠"),
+              React.createElement("span", { className: "error-message" }, jsonError)
+            ),
+            React.createElement("div", { className: "json-editor-wrapper" },
+              React.createElement(JsonCodeMirror, {
+                value: jsonText,
+                onChange: handleJsonChange,
+                hasError: !!jsonError,
+                editableFields: editableFields,
+                onFieldClick: (path) => {
+                  const field = editableFields.find(f => f.path === path);
+                  if (field) {
+                    setSelectedField(field);
+                  }
+                }
+              })
+            )
+          ),
+
+          // Field Editor Panel
+          React.createElement("div", { className: "field-editor-panel" },
+            selectedField
+              ? React.createElement(TextFieldEditor, {
+                  key: selectedField.path, // Force re-mount when path changes
+                  path: selectedField.path,
+                  value: editableFields.find(f => f.path === selectedField.path)?.value || selectedField.value,
+                  onSave: handleFieldSave,
+                  onCancel: () => setSelectedField(null)
+                })
+              : React.createElement("div", { className: "panel-empty" },
+                  React.createElement("div", { className: "empty-icon" }, "✎"),
+                  React.createElement("div", { className: "empty-title" }, "No field selected"),
+                  React.createElement("div", { className: "empty-subtitle" },
+                    "Click on a text field in the sidebar to edit it with placeholder support"
+                  )
+                )
+          )
+        ),
+
+        // Output Modal
+        showOutput && React.createElement(OutputModal, {
+          config,
+          onClose: () => setShowOutput(false)
+        })
+      );
+    };
+
+    // Render
+    ReactDOM.render(
+      React.createElement(JsonConfigEditor),
+      document.getElementById("root")
+    );
+  </script>
+</body>
+</html>
