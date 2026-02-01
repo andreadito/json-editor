@@ -386,8 +386,10 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
         </Box>
       </Box>
 
-      {/* Output modal */}
-      <OutputModal open={showOutput} config={config} onClose={() => setShowOutput(false)} />
+      {/* Output modal — only mount when open to avoid re-render overhead */}
+      {showOutput && (
+        <OutputModal open config={config} onClose={() => setShowOutput(false)} />
+      )}
     </Box>
   );
 };
