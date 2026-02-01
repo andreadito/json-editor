@@ -1,6 +1,58 @@
 import type { EditableField, ArrayFormat } from './types';
 
-const DEFAULT_PLACEHOLDER_REGEX = /:::([\w.]+)/g;
+/**
+ * Default placeholder regex.
+ * Captures: :::name.path  or  :::name.path|format  or  :::name.path|custom(sep)
+ * Group 1 = full token after :::  (e.g. "instruments|newline" or "foo.bar|custom(; )")
+ * Backward-compatible: :::foo.bar still matches (no pipe = default format).
+ */
+const DEFAULT_PLACEHOLDER_REGEX = /:::([\w.]+(?:\|(?:comma|newline|json|custom\([^)]*\)))?)/g;
+
+/** Parsed result from a single placeholder token */
+export interface ParsedPlaceholder {
+  /** The dot-path name, e.g. "instruments" or "user.name" */
+  name: string;
+  /** The array format hint, or undefined if not specified */
+  format?: ArrayFormat;
+  /** Custom separator when format is "custom" */
+  separator?: string;
+  /** The full raw token (everything after :::) */
+  raw: string;
+}
+
+/**
+ * Parse a placeholder token (the part after :::) into its components.
+ * Examples:
+ *   "foo.bar"              → { name: "foo.bar", raw: "foo.bar" }
+ *   "instruments|newline"  → { name: "instruments", format: "newline", raw: "instruments|newline" }
+ *   "items|custom(; )"     → { name: "items", format: "custom", separator: "; ", raw: "items|custom(; )" }
+ */
+export function parsePlaceholder(token: string): ParsedPlaceholder {
+  const pipeIdx = token.indexOf('|');
+  if (pipeIdx === -1) {
+    return { name: token, raw: token };
+  }
+  const name = token.slice(0, pipeIdx);
+  const formatPart = token.slice(pipeIdx + 1);
+
+  const customMatch = formatPart.match(/^custom\(([^)]*)\)$/);
+  if (customMatch) {
+    return { name, format: 'custom', separator: customMatch[1], raw: token };
+  }
+
+  const format = formatPart as ArrayFormat;
+  return { name, format, raw: token };
+}
+
+/**
+ * Build a placeholder string from components.
+ * Inverse of parsePlaceholder — used when the UI sets a format.
+ */
+export function buildPlaceholder(name: string, format?: ArrayFormat, separator?: string): string {
+  if (!format || format === 'comma') return `:::${name}`;
+  if (format === 'custom') return `:::${name}|custom(${separator ?? ' | '})`;
+  return `:::${name}|${format}`;
+}
 
 export function hasPlaceholders(value: string, pattern: RegExp = DEFAULT_PLACEHOLDER_REGEX): boolean {
   const re = new RegExp(pattern.source, pattern.flags);
@@ -70,10 +122,13 @@ export function setValueAtPath(
   return result;
 }
 
+/**
+ * Extract unique placeholder *names* (without format hints) from text.
+ */
 export function getPlaceholdersFromText(text: string, pattern: RegExp = DEFAULT_PLACEHOLDER_REGEX): string[] {
   const re = new RegExp(pattern.source, pattern.flags);
   const matches = [...text.matchAll(re)];
-  return [...new Set(matches.map((m) => m[1]))];
+  return [...new Set(matches.map((m) => parsePlaceholder(m[1]).name))];
 }
 
 /**
@@ -145,18 +200,27 @@ export function getContextPaths(obj: unknown, prefix = ''): string[] {
 /**
  * Resolve all placeholders in a text string against a context object,
  * returning the full string with placeholders replaced by their resolved values.
+ *
+ * Inline format hints take precedence: :::items|newline uses "newline".
+ * Plain :::items falls back to the `defaultArrayFormat` parameter.
+ *
+ * This is the function your downstream application should use.
+ * Import it and call: resolveText(fieldValue, context)
  */
 export function resolveText(
   text: string,
   context: Record<string, unknown>,
   pattern: RegExp = DEFAULT_PLACEHOLDER_REGEX,
-  arrayFormat: ArrayFormat = 'comma',
-  customSeparator = ' | ',
+  defaultArrayFormat: ArrayFormat = 'comma',
+  defaultCustomSeparator = ' | ',
 ): string {
   const re = new RegExp(pattern.source, pattern.flags);
-  return text.replace(re, (_match, name: string) => {
-    const val = resolveValue(context, name);
+  return text.replace(re, (_match, token: string) => {
+    const parsed = parsePlaceholder(token);
+    const val = resolveValue(context, parsed.name);
     if (val === undefined) return _match; // leave unresolved placeholders as-is
-    return formatResolved(val, arrayFormat, customSeparator);
+    const fmt = parsed.format ?? defaultArrayFormat;
+    const sep = parsed.separator ?? defaultCustomSeparator;
+    return formatResolved(val, fmt, sep);
   });
 }

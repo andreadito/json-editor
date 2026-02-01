@@ -4,7 +4,7 @@ import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import { alpha, useTheme } from '@mui/material/styles';
 import { placeholderChipSx, mono } from './theme';
-import { resolveValue, formatResolved } from './utils';
+import { resolveValue, formatResolved, parsePlaceholder } from './utils';
 import type { ArrayFormat } from './types';
 
 interface Props {
@@ -12,13 +12,14 @@ interface Props {
   pattern?: RegExp;
   /** When provided, placeholders are resolved and shown as their real values */
   context?: Record<string, unknown>;
+  /** Fallback array format when no inline hint is present */
   arrayFormat?: ArrayFormat;
   customSeparator?: string;
 }
 
 const PlaceholderHighlighter: React.FC<Props> = ({
   text,
-  pattern = /:::([\w.]+)/g,
+  pattern = /:::([\w.]+(?:\|(?:comma|newline|json|custom\([^)]*\)))?)/g,
   context,
   arrayFormat = 'comma',
   customSeparator = ' | ',
@@ -45,19 +46,25 @@ const PlaceholderHighlighter: React.FC<Props> = ({
         );
       }
 
-      const name = match[1];
+      const parsed = parsePlaceholder(match[1]);
+      const fmt = parsed.format ?? arrayFormat;
+      const sep = parsed.separator ?? customSeparator;
 
       if (context) {
-        const resolved = resolveValue(context, name);
+        const resolved = resolveValue(context, parsed.name);
         const isResolved = resolved !== undefined;
         const displayValue = isResolved
-          ? formatResolved(resolved, arrayFormat, customSeparator)
-          : name;
+          ? formatResolved(resolved, fmt, sep)
+          : parsed.name;
+
+        const tooltipLabel = isResolved
+          ? `:::${parsed.raw}` + (parsed.format ? '' : ` (${fmt})`)
+          : 'Unresolved placeholder';
 
         result.push(
           <Tooltip
             key={`p-${match.index}`}
-            title={isResolved ? `:::${name}` : 'Unresolved placeholder'}
+            title={tooltipLabel}
             arrow
             placement="top"
           >
@@ -93,7 +100,12 @@ const PlaceholderHighlighter: React.FC<Props> = ({
             <Box component="span" sx={{ fontSize: 8, color: 'primary.main' }}>
               ◆
             </Box>
-            {name}
+            {parsed.name}
+            {parsed.format && (
+              <Box component="span" sx={{ fontSize: 9, color: 'text.disabled', ml: 0.5 }}>
+                |{parsed.format === 'custom' ? `custom(${parsed.separator})` : parsed.format}
+              </Box>
+            )}
           </Box>,
         );
       }

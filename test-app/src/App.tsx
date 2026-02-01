@@ -44,7 +44,7 @@ const sampleConfig = {
     message:
       "Hello :::user.firstName! Your order #:::order.id has been confirmed. We'll deliver to :::user.address.street, :::user.address.city by :::delivery.estimatedDate.",
     subject: 'Order Confirmation',
-    watchlist: 'Current instruments: :::instruments at prices :::prices',
+    watchlist: 'Current instruments: :::instruments|newline at prices :::prices|custom(; )',
     specialChars: "Quotes: 'single' and \"double\". Symbols: @#$%^&*()",
     footer: 'This is an automated message. Please do not reply directly.',
     metadata: {

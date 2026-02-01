@@ -22,7 +22,7 @@ import JsonCodeEditor from './JsonCodeEditor';
 import TextFieldEditor from './TextFieldEditor';
 import OutputModal from './OutputModal';
 
-const DEFAULT_PLACEHOLDER_REGEX = /:::([\w.]+)/g;
+const DEFAULT_PLACEHOLDER_REGEX = /:::([\w.]+(?:\|(?:comma|newline|json|custom\([^)]*\)))?)/g;
 
 const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   initialValue,

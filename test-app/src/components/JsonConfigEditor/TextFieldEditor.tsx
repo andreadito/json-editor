@@ -15,7 +15,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { alpha, useTheme } from '@mui/material/styles';
 import PlaceholderHighlighter from './PlaceholderHighlighter';
-import { getPlaceholdersFromText, resolveValue } from './utils';
+import { getPlaceholdersFromText, resolveValue, parsePlaceholder, buildPlaceholder } from './utils';
 import { accent, accentGradient, mono } from './theme';
 import type { ArrayFormat } from './types';
 
@@ -36,7 +36,7 @@ const TextFieldEditor: React.FC<Props> = ({
   value,
   onSave,
   onCancel,
-  pattern = /:::([\w.]+)/g,
+  pattern = /:::([\w.]+(?:\|(?:comma|newline|json|custom\([^)]*\)))?)/g,
   quickPlaceholders = ['user.name', 'user.email', 'data.id', 'system.date'],
   context,
   defaultArrayFormat = 'comma',
@@ -47,8 +47,9 @@ const TextFieldEditor: React.FC<Props> = ({
   const [showPreview, setShowPreview] = useState(true);
   const [justSaved, setJustSaved] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [arrayFormat, setArrayFormat] = useState<ArrayFormat>(defaultArrayFormat);
-  const [customSep, setCustomSep] = useState(customArraySeparator);
+  // Array format UI state — when changed, rewrites placeholders in text
+  const [arrayFormat, setArrayFormatState] = useState<ArrayFormat>(defaultArrayFormat);
+  const [customSep, setCustomSepState] = useState(customArraySeparator);
 
   useEffect(() => {
     setEditValue(value);
@@ -70,6 +71,37 @@ const TextFieldEditor: React.FC<Props> = ({
     if (!context) return false;
     return placeholders.some((p) => Array.isArray(resolveValue(context, p)));
   }, [context, placeholders]);
+
+  /** Rewrite all array-valued placeholders in the text with a new format hint */
+  const rewriteArrayFormats = useCallback(
+    (text: string, fmt: ArrayFormat, sep: string) => {
+      if (!context) return text;
+      const re = new RegExp(pattern.source, pattern.flags);
+      return text.replace(re, (fullMatch, token: string) => {
+        const parsed = parsePlaceholder(token);
+        const val = resolveValue(context, parsed.name);
+        if (!Array.isArray(val)) return fullMatch; // only touch array placeholders
+        return buildPlaceholder(parsed.name, fmt, sep);
+      });
+    },
+    [context, pattern],
+  );
+
+  const setArrayFormat = useCallback(
+    (fmt: ArrayFormat) => {
+      setArrayFormatState(fmt);
+      setEditValue((prev) => rewriteArrayFormats(prev, fmt, customSep));
+    },
+    [rewriteArrayFormats, customSep],
+  );
+
+  const setCustomSep = useCallback(
+    (sep: string) => {
+      setCustomSepState(sep);
+      setEditValue((prev) => rewriteArrayFormats(prev, 'custom', sep));
+    },
+    [rewriteArrayFormats],
+  );
 
   const insertPlaceholder = useCallback((name: string) => {
     setEditValue((prev) => prev + `:::${name}`);
@@ -326,7 +358,7 @@ const TextFieldEditor: React.FC<Props> = ({
                 <TextField
                   size="small"
                   value={customSep}
-                  onChange={(e) => setCustomSep(e.target.value)}
+                  onChange={(e) => setCustomSep(e.target.value as string)}
                   placeholder="separator"
                   sx={{
                     width: 80,
