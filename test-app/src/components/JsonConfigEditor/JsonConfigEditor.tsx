@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -41,6 +41,10 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [jsonText, setJsonText] = useState(() => JSON.stringify(initialValue, null, 2));
 
+  // Track whether a config change came from the code editor (don't reformat)
+  // vs. from the field editor / reset (do reformat and push into CodeMirror)
+  const changeFromCodeEditor = useRef(false);
+
   const editableFields = useMemo(() => findEditableFields(config, '', placeholderPattern), [config, placeholderPattern]);
 
   const filteredFields = useMemo(() => {
@@ -69,8 +73,13 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
     [editableFields],
   );
 
-  // Sync jsonText when config changes from field editor
+  // Only push formatted JSON back into CodeMirror when the change came
+  // from the field editor panel or a reset — NOT from the code editor itself.
   useEffect(() => {
+    if (changeFromCodeEditor.current) {
+      changeFromCodeEditor.current = false;
+      return;
+    }
     setJsonText(JSON.stringify(config, null, 2));
     setJsonError(null);
   }, [config]);
@@ -84,6 +93,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
     setJsonText(text);
     try {
       const parsed = JSON.parse(text);
+      changeFromCodeEditor.current = true;
       setConfig(parsed);
       setJsonError(null);
     } catch (err: unknown) {
@@ -94,6 +104,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   const handleFieldSave = useCallback(
     (newValue: string) => {
       if (selectedField) {
+        // This comes from the field editor — let the effect reformat
         setConfig((prev) => setValueAtPath(prev, selectedField.path, newValue));
       }
     },
@@ -109,6 +120,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   }, [config, onExport]);
 
   const handleReset = useCallback(() => {
+    // This comes from the reset button — let the effect reformat
     setConfig(initialValue);
     setSelectedField(null);
   }, [initialValue]);
