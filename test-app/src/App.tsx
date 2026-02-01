@@ -71,7 +71,7 @@ const sampleContext = {
     lastUpdateFrom: 'market-feed',
   },
   prices: {
-    data: [142.5, 338.2, 175.8, 185.1],
+    data: {values: [142.5, 338.2, 175.8, 185.1]},
     lastUpdatedAt: '2026-02-01T10:00:00Z',
     lastUpdateFrom: 'market-feed',
   },
