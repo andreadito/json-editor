@@ -132,17 +132,64 @@ export function getPlaceholdersFromText(text: string, pattern: RegExp = DEFAULT_
 }
 
 /**
- * Walk a context object by a dot-separated path (e.g. "parent.sub" → context.parent.sub).
- * Returns `undefined` when the path doesn't exist.
+ * Walk an object by an array of keys. Returns `undefined` when the path doesn't exist.
  */
-export function resolveValue(context: Record<string, unknown>, dotPath: string): unknown {
-  const keys = dotPath.split('.');
-  let current: unknown = context;
+function walkPath(obj: unknown, keys: string[]): unknown {
+  let current: unknown = obj;
   for (const key of keys) {
     if (current == null || typeof current !== 'object') return undefined;
     current = (current as Record<string, unknown>)[key];
   }
   return current;
+}
+
+/**
+ * Resolve a dot-separated path against a context object.
+ *
+ * When `dataKey` is set (defaults to `"data"`), the resolver transparently
+ * drills into the data key after the first path segment:
+ *
+ *   :::contextA.foo  →  context.contextA.data.foo
+ *
+ * It tries the direct path first so that top-level metadata keys like
+ * `lastUpdatedAt` are still accessible via `:::contextA.lastUpdatedAt`.
+ *
+ * Set `dataKey` to `null`/`undefined` to disable this behavior (flat context).
+ */
+export function resolveValue(
+  context: Record<string, unknown>,
+  dotPath: string,
+  dataKey: string | null | undefined = 'data',
+): unknown {
+  const keys = dotPath.split('.');
+
+  // 1. Try the direct path first (works for flat contexts and metadata keys)
+  const direct = walkPath(context, keys);
+
+  // If the direct result is a primitive / array / null, return it as-is
+  if (direct !== undefined) {
+    // If dataKey is set and the result is an object containing that key,
+    // auto-drill into it (e.g. :::instruments → context.instruments.data)
+    if (
+      dataKey &&
+      direct != null &&
+      typeof direct === 'object' &&
+      !Array.isArray(direct) &&
+      dataKey in (direct as Record<string, unknown>)
+    ) {
+      return (direct as Record<string, unknown>)[dataKey];
+    }
+    return direct;
+  }
+
+  // 2. If dataKey is set and path has ≥2 segments, try inserting dataKey after the first segment
+  //    e.g. ["contextA", "foo"] → ["contextA", "data", "foo"]
+  if (dataKey && keys.length >= 2) {
+    const withData = [keys[0], dataKey, ...keys.slice(1)];
+    return walkPath(context, withData);
+  }
+
+  return undefined;
 }
 
 /**
@@ -175,21 +222,43 @@ export function formatResolved(
 
 /**
  * Extract all dot-paths from a context object (leaf values only).
- * E.g. { user: { name: "A", address: { city: "M" } }, items: [1,2] }
- * → ["user.name", "user.address.city", "items"]
+ *
+ * When `dataKey` is set (e.g. `"data"`), the function skips that key in the
+ * generated paths so they match what users type in placeholders:
+ *
+ *   { ctxA: { data: { foo: "bar" } } }  →  ["ctxA.foo"]   (not "ctxA.data.foo")
+ *
+ * Top-level metadata keys (siblings of `data`) are still included.
  */
-export function getContextPaths(obj: unknown, prefix = ''): string[] {
+export function getContextPaths(
+  obj: unknown,
+  prefix = '',
+  dataKey: string | null | undefined = 'data',
+): string[] {
   const paths: string[] = [];
   if (obj == null || typeof obj !== 'object') return paths;
   if (Array.isArray(obj)) {
-    // Arrays are treated as leaf values (the user inserts :::items, not :::items.0)
     if (prefix) paths.push(prefix);
     return paths;
   }
   for (const [key, value] of Object.entries(obj)) {
+    // When this key is the dataKey, skip it in the path:
+    // - If data is an object, recurse into it using the parent prefix
+    // - If data is an array or primitive, add the parent prefix as a leaf
+    if (dataKey && key === dataKey && prefix) {
+      if (Array.isArray(value)) {
+        paths.push(prefix); // e.g. "instruments" (not "instruments.data")
+      } else if (value != null && typeof value === 'object') {
+        paths.push(...getContextPaths(value, prefix, null)); // null = don't skip again deeper
+      } else if (value != null) {
+        paths.push(prefix);
+      }
+      continue;
+    }
+
     const path = prefix ? `${prefix}.${key}` : key;
     if (value != null && typeof value === 'object' && !Array.isArray(value)) {
-      paths.push(...getContextPaths(value, path));
+      paths.push(...getContextPaths(value, path, dataKey));
     } else {
       paths.push(path);
     }
@@ -213,11 +282,12 @@ export function resolveText(
   pattern: RegExp = DEFAULT_PLACEHOLDER_REGEX,
   defaultArrayFormat: ArrayFormat = 'comma',
   defaultCustomSeparator = ' | ',
+  dataKey: string | null | undefined = 'data',
 ): string {
   const re = new RegExp(pattern.source, pattern.flags);
   return text.replace(re, (_match, token: string) => {
     const parsed = parsePlaceholder(token);
-    const val = resolveValue(context, parsed.name);
+    const val = resolveValue(context, parsed.name, dataKey);
     if (val === undefined) return _match; // leave unresolved placeholders as-is
     const fmt = parsed.format ?? defaultArrayFormat;
     const sep = parsed.separator ?? defaultCustomSeparator;

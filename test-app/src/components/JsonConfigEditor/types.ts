@@ -33,4 +33,15 @@ export interface JsonConfigEditorProps {
   defaultArrayFormat?: ArrayFormat;
   /** Custom separator string used when arrayFormat is 'custom'. Defaults to ' | ' */
   customArraySeparator?: string;
+  /**
+   * Key inside each top-level context entry that holds the actual data.
+   * Defaults to 'data'.
+   *
+   * Given context `{ contextA: { data: { foo: "bar" }, lastUpdatedAt: "..." } }`,
+   * the placeholder `:::contextA.foo` resolves to `context.contextA.data.foo`
+   * without the user having to write `:::contextA.data.foo`.
+   *
+   * Set to `undefined` or `null` to disable auto-drill (flat context).
+   */
+  contextDataKey?: string | null;
 }

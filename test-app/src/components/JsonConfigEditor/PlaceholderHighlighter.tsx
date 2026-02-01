@@ -15,6 +15,8 @@ interface Props {
   /** Fallback array format when no inline hint is present */
   arrayFormat?: ArrayFormat;
   customSeparator?: string;
+  /** Data key for auto-drill resolution. Defaults to 'data'. */
+  contextDataKey?: string | null;
 }
 
 const PlaceholderHighlighter: React.FC<Props> = ({
@@ -23,6 +25,7 @@ const PlaceholderHighlighter: React.FC<Props> = ({
   context,
   arrayFormat = 'comma',
   customSeparator = ' | ',
+  contextDataKey = 'data',
 }) => {
   const theme = useTheme();
 
@@ -51,7 +54,7 @@ const PlaceholderHighlighter: React.FC<Props> = ({
       const sep = parsed.separator ?? customSeparator;
 
       if (context) {
-        const resolved = resolveValue(context, parsed.name);
+        const resolved = resolveValue(context, parsed.name, contextDataKey);
         const isResolved = resolved !== undefined;
         const displayValue = isResolved
           ? formatResolved(resolved, fmt, sep)
@@ -127,7 +130,7 @@ const PlaceholderHighlighter: React.FC<Props> = ({
     }
 
     return result;
-  }, [text, pattern, context, arrayFormat, customSeparator, theme]);
+  }, [text, pattern, context, arrayFormat, customSeparator, contextDataKey, theme]);
 
   return <>{parts}</>;
 };
