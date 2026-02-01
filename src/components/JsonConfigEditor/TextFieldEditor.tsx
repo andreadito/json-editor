@@ -15,8 +15,9 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { alpha, useTheme } from '@mui/material/styles';
 import PlaceholderHighlighter from './PlaceholderHighlighter';
-import { getPlaceholdersFromText } from './utils';
+import { getPlaceholdersFromText, resolveValue } from './utils';
 import { accent, accentGradient, mono } from './theme';
+import type { ArrayFormat } from './types';
 
 interface Props {
   path: string;
@@ -25,6 +26,9 @@ interface Props {
   onCancel: () => void;
   pattern?: RegExp;
   quickPlaceholders?: string[];
+  context?: Record<string, unknown>;
+  defaultArrayFormat?: ArrayFormat;
+  customArraySeparator?: string;
 }
 
 const TextFieldEditor: React.FC<Props> = ({
@@ -34,12 +38,17 @@ const TextFieldEditor: React.FC<Props> = ({
   onCancel,
   pattern = /:::([\w.]+)/g,
   quickPlaceholders = ['user.name', 'user.email', 'data.id', 'system.date'],
+  context,
+  defaultArrayFormat = 'comma',
+  customArraySeparator = ' | ',
 }) => {
   const theme = useTheme();
   const [editValue, setEditValue] = useState(value);
   const [showPreview, setShowPreview] = useState(true);
   const [justSaved, setJustSaved] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [arrayFormat, setArrayFormat] = useState<ArrayFormat>(defaultArrayFormat);
+  const [customSep, setCustomSep] = useState(customArraySeparator);
 
   useEffect(() => {
     setEditValue(value);
@@ -56,6 +65,11 @@ const TextFieldEditor: React.FC<Props> = ({
   }, [editValue, onSave]);
 
   const placeholders = useMemo(() => getPlaceholdersFromText(editValue, pattern), [editValue, pattern]);
+
+  const hasArrayPlaceholders = useMemo(() => {
+    if (!context) return false;
+    return placeholders.some((p) => Array.isArray(resolveValue(context, p)));
+  }, [context, placeholders]);
 
   const insertPlaceholder = useCallback((name: string) => {
     setEditValue((prev) => prev + `:::${name}`);
@@ -268,12 +282,69 @@ const TextFieldEditor: React.FC<Props> = ({
             <ChevronRightIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
           )}
           <Typography variant="overline" sx={{ fontSize: 10, color: 'text.disabled', letterSpacing: 1 }}>
-            Preview
+            {context ? 'Resolved Preview' : 'Preview'}
           </Typography>
         </Box>
         <Collapse in={showPreview}>
+          {/* Array format selector — only when context has arrays */}
+          {context && hasArrayPlaceholders && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                flexWrap: 'wrap',
+                px: 1.5,
+                pt: 1,
+                pb: 0.5,
+                borderBottom: 1,
+                borderColor: 'divider',
+              }}
+            >
+              <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 500, mr: 0.5 }}>
+                Array format:
+              </Typography>
+              {(['comma', 'newline', 'json', 'custom'] as ArrayFormat[]).map((fmt) => (
+                <Chip
+                  key={fmt}
+                  label={fmt}
+                  size="small"
+                  variant={arrayFormat === fmt ? 'filled' : 'outlined'}
+                  onClick={() => setArrayFormat(fmt)}
+                  sx={{
+                    fontSize: 10,
+                    height: 22,
+                    textTransform: 'capitalize',
+                    ...(arrayFormat === fmt && {
+                      bgcolor: alpha(accent(theme), 0.12),
+                      color: theme.palette.mode === 'dark' ? '#a78bfa' : '#6d28d9',
+                    }),
+                  }}
+                />
+              ))}
+              {arrayFormat === 'custom' && (
+                <TextField
+                  size="small"
+                  value={customSep}
+                  onChange={(e) => setCustomSep(e.target.value)}
+                  placeholder="separator"
+                  sx={{
+                    width: 80,
+                    '& .MuiOutlinedInput-root': { borderRadius: 1, height: 22 },
+                    '& .MuiInputBase-input': { fontSize: 10, fontFamily: mono, px: 0.75, py: 0 },
+                  }}
+                />
+              )}
+            </Box>
+          )}
           <Box sx={{ p: 1.5, fontSize: 13, lineHeight: 1.8 }}>
-            <PlaceholderHighlighter text={editValue} pattern={pattern} />
+            <PlaceholderHighlighter
+              text={editValue}
+              pattern={pattern}
+              context={context}
+              arrayFormat={arrayFormat}
+              customSeparator={customSep}
+            />
           </Box>
         </Collapse>
       </Box>

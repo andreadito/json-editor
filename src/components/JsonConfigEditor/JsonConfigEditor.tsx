@@ -33,6 +33,9 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   quickPlaceholders,
   title = 'JSON Config Editor',
   height = '100vh',
+  placeholderContext,
+  defaultArrayFormat = 'comma',
+  customArraySeparator = ' | ',
 }) => {
   const theme = useTheme();
   const [config, setConfig] = useState<Record<string, unknown>>(initialValue);
@@ -398,6 +401,9 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
               onCancel={() => setSelectedField(null)}
               pattern={placeholderPattern}
               quickPlaceholders={quickPlaceholders}
+              context={placeholderContext}
+              defaultArrayFormat={defaultArrayFormat}
+              customArraySeparator={customArraySeparator}
             />
           ) : (
             <Box

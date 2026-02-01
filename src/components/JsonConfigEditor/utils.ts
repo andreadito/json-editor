@@ -1,4 +1,4 @@
-import type { EditableField } from './types';
+import type { EditableField, ArrayFormat } from './types';
 
 const DEFAULT_PLACEHOLDER_REGEX = /:::([\w.]+)/g;
 
@@ -74,4 +74,65 @@ export function getPlaceholdersFromText(text: string, pattern: RegExp = DEFAULT_
   const re = new RegExp(pattern.source, pattern.flags);
   const matches = [...text.matchAll(re)];
   return [...new Set(matches.map((m) => m[1]))];
+}
+
+/**
+ * Walk a context object by a dot-separated path (e.g. "parent.sub" → context.parent.sub).
+ * Returns `undefined` when the path doesn't exist.
+ */
+export function resolveValue(context: Record<string, unknown>, dotPath: string): unknown {
+  const keys = dotPath.split('.');
+  let current: unknown = context;
+  for (const key of keys) {
+    if (current == null || typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/**
+ * Format a resolved value as a display string.
+ * Arrays are formatted according to the chosen ArrayFormat.
+ */
+export function formatResolved(
+  value: unknown,
+  arrayFormat: ArrayFormat = 'comma',
+  customSeparator = ' | ',
+): string {
+  if (value === undefined) return '';
+  if (value === null) return 'null';
+  if (Array.isArray(value)) {
+    switch (arrayFormat) {
+      case 'newline':
+        return value.map(String).join('\n');
+      case 'json':
+        return JSON.stringify(value);
+      case 'custom':
+        return value.map(String).join(customSeparator);
+      case 'comma':
+      default:
+        return value.map(String).join(', ');
+    }
+  }
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/**
+ * Resolve all placeholders in a text string against a context object,
+ * returning the full string with placeholders replaced by their resolved values.
+ */
+export function resolveText(
+  text: string,
+  context: Record<string, unknown>,
+  pattern: RegExp = DEFAULT_PLACEHOLDER_REGEX,
+  arrayFormat: ArrayFormat = 'comma',
+  customSeparator = ' | ',
+): string {
+  const re = new RegExp(pattern.source, pattern.flags);
+  return text.replace(re, (_match, name: string) => {
+    const val = resolveValue(context, name);
+    if (val === undefined) return _match; // leave unresolved placeholders as-is
+    return formatResolved(val, arrayFormat, customSeparator);
+  });
 }

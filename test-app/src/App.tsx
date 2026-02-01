@@ -7,6 +7,29 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import Box from '@mui/material/Box';
 import { JsonConfigEditor } from './components/JsonConfigEditor';
 
+const sampleContext = {
+  auth: { token: 'eyJhbGciOiJIUzI1NiJ9...' },
+  request: { id: 'req-7f3a-b82c' },
+  user: {
+    firstName: 'Andrea',
+    name: 'Andrea D.',
+    email: 'andrea@example.com',
+    address: { street: '123 Main St', city: 'Milan' },
+  },
+  order: { id: 'ORD-44821' },
+  delivery: { estimatedDate: '2026-02-05' },
+  system: { currentTime: '2026-02-01T10:30:00Z', date: '2026-02-01' },
+  recipient: {
+    primary: { email: 'primary@example.com' },
+    cc: { email: 'cc@example.com' },
+  },
+  deep: { placeholder: 'resolved-deep-value' },
+  error: { code: 'E-5001', details: 'Connection timeout on node-3' },
+  data: { id: 'DATA-99', field: 'sample-field' },
+  instruments: ['AAPL', 'MSFT', 'GOOG', 'AMZN'],
+  prices: [142.5, 338.2, 175.8, 185.1],
+};
+
 const sampleConfig = {
   method: 'POST',
   url: '/api/webhook',
@@ -21,6 +44,7 @@ const sampleConfig = {
     message:
       "Hello :::user.firstName! Your order #:::order.id has been confirmed. We'll deliver to :::user.address.street, :::user.address.city by :::delivery.estimatedDate.",
     subject: 'Order Confirmation',
+    watchlist: 'Current instruments: :::instruments at prices :::prices',
     specialChars: "Quotes: 'single' and \"double\". Symbols: @#$%^&*()",
     footer: 'This is an automated message. Please do not reply directly.',
     metadata: {
@@ -93,6 +117,7 @@ function App() {
         onSave={(config) => console.log('[onSave]', config)}
         title="JSON Editor"
         height="100vh"
+        placeholderContext={sampleContext}
       />
     </ThemeProvider>
   );

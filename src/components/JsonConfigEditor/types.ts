@@ -8,6 +8,8 @@ export interface EditableField {
 
 export type FieldFilter = 'all' | 'placeholders' | 'long';
 
+export type ArrayFormat = 'comma' | 'newline' | 'json' | 'custom';
+
 export interface JsonConfigEditorProps {
   /** Initial JSON configuration object */
   initialValue: Record<string, unknown>;
@@ -25,4 +27,10 @@ export interface JsonConfigEditorProps {
   title?: string;
   /** Height of the editor. Defaults to '100vh' */
   height?: string | number;
+  /** Context object used to resolve placeholder values in preview (e.g. { foo: "bar", parent: { sub: 1 } }) */
+  placeholderContext?: Record<string, unknown>;
+  /** Default array rendering format for resolved placeholders. Defaults to 'comma' */
+  defaultArrayFormat?: ArrayFormat;
+  /** Custom separator string used when arrayFormat is 'custom'. Defaults to ' | ' */
+  customArraySeparator?: string;
 }
