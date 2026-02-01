@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -9,28 +9,33 @@ import Chip from '@mui/material/Chip';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import SaveIcon from '@mui/icons-material/Save';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import { alpha, useTheme } from '@mui/material/styles';
 
 import type { JsonConfigEditorProps, EditableField, FieldFilter } from './types';
-import { findEditableFields, setValueAtPath } from './utils';
+import { findEditableFields, setValueAtPath, getContextPaths } from './utils';
 import { accent, accentGradient, containerSx, headerSx, sidebarSx, mono } from './theme';
 import FieldCard from './FieldCard';
 import JsonCodeEditor from './JsonCodeEditor';
 import TextFieldEditor from './TextFieldEditor';
 import OutputModal from './OutputModal';
 
-const DEFAULT_PLACEHOLDER_REGEX = /:::([\w.]+)/g;
+const DEFAULT_PLACEHOLDER_REGEX = /:::([\w.]+(?:\|(?:comma|newline|json|custom\([^)]*\)))?)/g;
 
 const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   initialValue,
+  onSave,
   onChange,
   onExport,
   placeholderPattern = DEFAULT_PLACEHOLDER_REGEX,
   quickPlaceholders,
   title = 'JSON Config Editor',
   height = '100vh',
+  placeholderContext,
+  defaultArrayFormat = 'comma',
+  customArraySeparator = ' | ',
 }) => {
   const theme = useTheme();
   const [config, setConfig] = useState<Record<string, unknown>>(initialValue);
@@ -41,7 +46,24 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [jsonText, setJsonText] = useState(() => JSON.stringify(initialValue, null, 2));
 
+  // Track dirty state: config has diverged from initialValue (or last save)
+  const [savedConfig, setSavedConfig] = useState<Record<string, unknown>>(initialValue);
+  const isDirty = useMemo(() => JSON.stringify(config) !== JSON.stringify(savedConfig), [config, savedConfig]);
+  const [justSavedGlobal, setJustSavedGlobal] = useState(false);
+
+  // Track whether a config change came from the code editor (don't reformat)
+  // vs. from the field editor / reset (do reformat and push into CodeMirror)
+  const changeFromCodeEditor = useRef(false);
+
   const editableFields = useMemo(() => findEditableFields(config, '', placeholderPattern), [config, placeholderPattern]);
+
+  // Merge static quickPlaceholders with paths derived from context
+  const mergedQuickPlaceholders = useMemo(() => {
+    const contextPaths = placeholderContext ? getContextPaths(placeholderContext) : [];
+    const staticPaths = quickPlaceholders ?? [];
+    // Deduplicate, static first then context-derived
+    return [...new Set([...staticPaths, ...contextPaths])];
+  }, [quickPlaceholders, placeholderContext]);
 
   const filteredFields = useMemo(() => {
     let fields = editableFields;
@@ -69,21 +91,36 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
     [editableFields],
   );
 
-  // Sync jsonText when config changes from field editor
+  // Only push formatted JSON back into CodeMirror when the change came
+  // from the field editor panel or a reset — NOT from the code editor itself.
   useEffect(() => {
+    if (changeFromCodeEditor.current) {
+      changeFromCodeEditor.current = false;
+      return;
+    }
     setJsonText(JSON.stringify(config, null, 2));
     setJsonError(null);
   }, [config]);
 
-  // Notify parent
+  // Optionally notify parent on every change (live mode)
   useEffect(() => {
     onChange?.(config);
   }, [config, onChange]);
+
+  const handleSaveClick = useCallback(() => {
+    if (jsonError) return;
+    onSave?.(config);
+    setSavedConfig(config);
+    setJustSavedGlobal(true);
+    const t = setTimeout(() => setJustSavedGlobal(false), 2000);
+    return () => clearTimeout(t);
+  }, [config, jsonError, onSave]);
 
   const handleJsonChange = useCallback((text: string) => {
     setJsonText(text);
     try {
       const parsed = JSON.parse(text);
+      changeFromCodeEditor.current = true;
       setConfig(parsed);
       setJsonError(null);
     } catch (err: unknown) {
@@ -94,6 +131,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   const handleFieldSave = useCallback(
     (newValue: string) => {
       if (selectedField) {
+        // This comes from the field editor — let the effect reformat
         setConfig((prev) => setValueAtPath(prev, selectedField.path, newValue));
       }
     },
@@ -109,7 +147,9 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   }, [config, onExport]);
 
   const handleReset = useCallback(() => {
+    // This comes from the reset button — let the effect reformat
     setConfig(initialValue);
+    setSavedConfig(initialValue);
     setSelectedField(null);
   }, [initialValue]);
 
@@ -142,7 +182,14 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
           </Box>
           <Typography sx={{ fontSize: 15, fontWeight: 600 }}>{title}</Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {justSavedGlobal && (
+            <Chip
+              label="✓ Saved"
+              size="small"
+              sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontSize: 10, height: 22, fontWeight: 600 }}
+            />
+          )}
           <Button
             size="small"
             variant="outlined"
@@ -152,12 +199,39 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
           >
             Reset
           </Button>
+          {onSave && (
+            <Button
+              size="small"
+              variant="contained"
+              disabled={!isDirty || !!jsonError}
+              startIcon={<SaveIcon sx={{ fontSize: '16px !important' }} />}
+              onClick={handleSaveClick}
+              sx={{
+                textTransform: 'none',
+                fontSize: 12,
+                background: isDirty && !jsonError ? accentGradient(theme) : undefined,
+                ...(isDirty && !jsonError && {
+                  animation: 'headerPulse 1.5s ease-in-out infinite',
+                  '@keyframes headerPulse': {
+                    '0%, 100%': { boxShadow: `0 0 0 0 ${alpha(accent(theme), 0.4)}` },
+                    '50%': { boxShadow: `0 0 0 6px ${alpha(accent(theme), 0)}` },
+                  },
+                }),
+              }}
+            >
+              {isDirty ? 'Save' : 'Saved'}
+            </Button>
+          )}
           <Button
             size="small"
-            variant="contained"
+            variant={onSave ? 'outlined' : 'contained'}
             startIcon={<DataObjectIcon sx={{ fontSize: '16px !important' }} />}
             onClick={handleExport}
-            sx={{ textTransform: 'none', fontSize: 12, background: accentGradient(theme) }}
+            sx={{
+              textTransform: 'none',
+              fontSize: 12,
+              ...(!onSave && { background: accentGradient(theme) }),
+            }}
           >
             Get Output
           </Button>
@@ -272,6 +346,9 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
               <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
                 JSON Configuration
               </Typography>
+              <Typography sx={{ fontSize: 11, color: 'text.disabled', fontStyle: 'italic' }}>
+                Click underlined keys to edit
+              </Typography>
             </Box>
             <Chip
               label={jsonError ? 'Invalid JSON' : 'Valid JSON'}
@@ -308,7 +385,16 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
 
           {/* Code editor */}
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <JsonCodeEditor value={jsonText} onChange={handleJsonChange} hasError={!!jsonError} />
+            <JsonCodeEditor
+              value={jsonText}
+              onChange={handleJsonChange}
+              hasError={!!jsonError}
+              editableFields={editableFields}
+              onFieldClick={(path) => {
+                const field = editableFields.find((f) => f.path === path);
+                if (field) setSelectedField(field);
+              }}
+            />
           </Box>
         </Box>
 
@@ -322,7 +408,10 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
               onSave={handleFieldSave}
               onCancel={() => setSelectedField(null)}
               pattern={placeholderPattern}
-              quickPlaceholders={quickPlaceholders}
+              quickPlaceholders={mergedQuickPlaceholders}
+              context={placeholderContext}
+              defaultArrayFormat={defaultArrayFormat}
+              customArraySeparator={customArraySeparator}
             />
           ) : (
             <Box
@@ -355,15 +444,17 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
                 No field selected
               </Typography>
               <Typography sx={{ fontSize: 12, color: 'text.disabled', lineHeight: 1.6 }}>
-                Click on a text field in the sidebar to edit it with placeholder support
+                Click a field in the sidebar or an underlined key in the JSON editor to open it here
               </Typography>
             </Box>
           )}
         </Box>
       </Box>
 
-      {/* Output modal */}
-      <OutputModal open={showOutput} config={config} onClose={() => setShowOutput(false)} />
+      {/* Output modal — only mount when open to avoid re-render overhead */}
+      {showOutput && (
+        <OutputModal open config={config} onClose={() => setShowOutput(false)} />
+      )}
     </Box>
   );
 };

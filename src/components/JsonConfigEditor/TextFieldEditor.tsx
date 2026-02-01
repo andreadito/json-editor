@@ -6,15 +6,18 @@ import IconButton from '@mui/material/IconButton';
 import Chip from '@mui/material/Chip';
 import Collapse from '@mui/material/Collapse';
 import TextField from '@mui/material/TextField';
-import CloseIcon from '@mui/icons-material/Close';
+import Dialog from '@mui/material/Dialog';
 import SaveIcon from '@mui/icons-material/Save';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { alpha, useTheme } from '@mui/material/styles';
 import PlaceholderHighlighter from './PlaceholderHighlighter';
-import { getPlaceholdersFromText } from './utils';
+import { getPlaceholdersFromText, resolveValue, parsePlaceholder, buildPlaceholder } from './utils';
 import { accent, accentGradient, mono } from './theme';
+import type { ArrayFormat } from './types';
 
 interface Props {
   path: string;
@@ -23,6 +26,9 @@ interface Props {
   onCancel: () => void;
   pattern?: RegExp;
   quickPlaceholders?: string[];
+  context?: Record<string, unknown>;
+  defaultArrayFormat?: ArrayFormat;
+  customArraySeparator?: string;
 }
 
 const TextFieldEditor: React.FC<Props> = ({
@@ -30,13 +36,20 @@ const TextFieldEditor: React.FC<Props> = ({
   value,
   onSave,
   onCancel,
-  pattern = /:::([\w.]+)/g,
+  pattern = /:::([\w.]+(?:\|(?:comma|newline|json|custom\([^)]*\)))?)/g,
   quickPlaceholders = ['user.name', 'user.email', 'data.id', 'system.date'],
+  context,
+  defaultArrayFormat = 'comma',
+  customArraySeparator = ' | ',
 }) => {
   const theme = useTheme();
   const [editValue, setEditValue] = useState(value);
   const [showPreview, setShowPreview] = useState(true);
   const [justSaved, setJustSaved] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  // Array format UI state — when changed, rewrites placeholders in text
+  const [arrayFormat, setArrayFormatState] = useState<ArrayFormat>(defaultArrayFormat);
+  const [customSep, setCustomSepState] = useState(customArraySeparator);
 
   useEffect(() => {
     setEditValue(value);
@@ -54,219 +67,358 @@ const TextFieldEditor: React.FC<Props> = ({
 
   const placeholders = useMemo(() => getPlaceholdersFromText(editValue, pattern), [editValue, pattern]);
 
+  const hasArrayPlaceholders = useMemo(() => {
+    if (!context) return false;
+    return placeholders.some((p) => Array.isArray(resolveValue(context, p)));
+  }, [context, placeholders]);
+
+  /** Rewrite all array-valued placeholders in the text with a new format hint */
+  const rewriteArrayFormats = useCallback(
+    (text: string, fmt: ArrayFormat, sep: string) => {
+      if (!context) return text;
+      const re = new RegExp(pattern.source, pattern.flags);
+      return text.replace(re, (fullMatch, token: string) => {
+        const parsed = parsePlaceholder(token);
+        const val = resolveValue(context, parsed.name);
+        if (!Array.isArray(val)) return fullMatch; // only touch array placeholders
+        return buildPlaceholder(parsed.name, fmt, sep);
+      });
+    },
+    [context, pattern],
+  );
+
+  const setArrayFormat = useCallback(
+    (fmt: ArrayFormat) => {
+      setArrayFormatState(fmt);
+      setEditValue((prev) => rewriteArrayFormats(prev, fmt, customSep));
+    },
+    [rewriteArrayFormats, customSep],
+  );
+
+  const setCustomSep = useCallback(
+    (sep: string) => {
+      setCustomSepState(sep);
+      setEditValue((prev) => rewriteArrayFormats(prev, 'custom', sep));
+    },
+    [rewriteArrayFormats],
+  );
+
   const insertPlaceholder = useCallback((name: string) => {
     setEditValue((prev) => prev + `:::${name}`);
   }, []);
 
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header */}
-      <Box
-        sx={{
-          px: 2,
-          py: 1.5,
-          borderBottom: 1,
-          borderColor: 'divider',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          bgcolor: 'background.paper',
-          gap: 1,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1, overflow: 'hidden' }}>
-          <Box
-            sx={{
-              width: 24,
-              height: 24,
-              borderRadius: 0.75,
-              background: accentGradient(theme),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 11,
-              color: '#fff',
-              flexShrink: 0,
-            }}
-          >
-            ✎
-          </Box>
-          <Typography
-            noWrap
-            sx={{ fontFamily: mono, fontSize: 12, color: theme.palette.mode === 'dark' ? '#a78bfa' : '#6d28d9' }}
-          >
-            {path}
-          </Typography>
-          {hasChanges && (
-            <Chip label="Unsaved" size="small" sx={{ bgcolor: alpha('#f59e0b', 0.12), color: '#f59e0b', fontSize: 10, height: 20, fontWeight: 600 }} />
-          )}
-          {justSaved && !hasChanges && (
-            <Chip label="✓ Saved" size="small" sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontSize: 10, height: 20, fontWeight: 600 }} />
-          )}
+  // ── Shared header bar ──────────────────────────────────────────────────
+
+  const headerBar = (
+    <Box
+      sx={{
+        px: 2,
+        py: 1.5,
+        borderBottom: 1,
+        borderColor: 'divider',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        bgcolor: 'background.paper',
+        gap: 1,
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1, overflow: 'hidden' }}>
+        <Box
+          sx={{
+            width: 24,
+            height: 24,
+            borderRadius: 0.75,
+            background: accentGradient(theme),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 11,
+            color: '#fff',
+            flexShrink: 0,
+          }}
+        >
+          ✎
         </Box>
-        <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-          <Button size="small" variant="outlined" onClick={onCancel} sx={{ fontSize: 11, textTransform: 'none', minWidth: 0, px: 1.5 }}>
-            Cancel
-          </Button>
-          <Button
-            size="small"
-            variant="contained"
-            disabled={!hasChanges}
-            onClick={handleSave}
-            startIcon={<SaveIcon sx={{ fontSize: '14px !important' }} />}
-            sx={{
-              fontSize: 11,
-              textTransform: 'none',
-              minWidth: 0,
-              px: 1.5,
-              background: hasChanges ? accentGradient(theme) : undefined,
-              ...(hasChanges && {
-                animation: 'pulse 1.5s ease-in-out infinite',
-                '@keyframes pulse': {
-                  '0%, 100%': { boxShadow: `0 0 0 0 ${alpha(accent(theme), 0.4)}` },
-                  '50%': { boxShadow: `0 0 0 6px ${alpha(accent(theme), 0)}` },
-                },
-              }),
-            }}
-          >
-            {hasChanges ? 'Apply to JSON' : 'No Changes'}
-          </Button>
-        </Box>
+        <Typography
+          noWrap
+          sx={{ fontFamily: mono, fontSize: 12, color: theme.palette.mode === 'dark' ? '#a78bfa' : '#6d28d9' }}
+        >
+          {path}
+        </Typography>
+        {hasChanges && (
+          <Chip label="Unsaved" size="small" sx={{ bgcolor: alpha('#f59e0b', 0.12), color: '#f59e0b', fontSize: 10, height: 20, fontWeight: 600 }} />
+        )}
+        {justSaved && !hasChanges && (
+          <Chip label="✓ Saved" size="small" sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontSize: 10, height: 20, fontWeight: 600 }} />
+        )}
+      </Box>
+      <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0, alignItems: 'center' }}>
+        <IconButton
+          size="small"
+          onClick={() => setExpanded((v) => !v)}
+          sx={{ color: 'text.secondary' }}
+          title={expanded ? 'Exit fullscreen' : 'Fullscreen editor'}
+        >
+          {expanded ? <FullscreenExitIcon sx={{ fontSize: 18 }} /> : <FullscreenIcon sx={{ fontSize: 18 }} />}
+        </IconButton>
+        <Button size="small" variant="outlined" onClick={onCancel} sx={{ fontSize: 11, textTransform: 'none', minWidth: 0, px: 1.5 }}>
+          Cancel
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={!hasChanges}
+          onClick={handleSave}
+          startIcon={<SaveIcon sx={{ fontSize: '14px !important' }} />}
+          sx={{
+            fontSize: 11,
+            textTransform: 'none',
+            minWidth: 0,
+            px: 1.5,
+            background: hasChanges ? accentGradient(theme) : undefined,
+            ...(hasChanges && {
+              animation: 'pulse 1.5s ease-in-out infinite',
+              '@keyframes pulse': {
+                '0%, 100%': { boxShadow: `0 0 0 0 ${alpha(accent(theme), 0.4)}` },
+                '50%': { boxShadow: `0 0 0 6px ${alpha(accent(theme), 0)}` },
+              },
+            }),
+          }}
+        >
+          {hasChanges ? 'Apply to JSON' : 'No Changes'}
+        </Button>
+      </Box>
+    </Box>
+  );
+
+  // ── Shared body content ────────────────────────────────────────────────
+
+  const bodyContent = (isFullscreen: boolean) => (
+    <Box sx={{ flex: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column' }}>
+      {/* Text area */}
+      <Box sx={{ mb: 2, flex: isFullscreen ? 1 : undefined, display: 'flex', flexDirection: 'column' }}>
+        <Typography variant="overline" sx={{ fontSize: 10, color: 'text.disabled', letterSpacing: 1, mb: 1, display: 'block' }}>
+          Edit Value
+        </Typography>
+        <TextField
+          fullWidth
+          multiline
+          {...(isFullscreen
+            ? { minRows: 10, sx: { flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 1.5, height: '100%', alignItems: 'flex-start' }, '& .MuiInputBase-inputMultiline': { height: '100% !important', overflow: 'auto !important' } } }
+            : { minRows: 5, maxRows: 12, sx: { '& .MuiOutlinedInput-root': { borderRadius: 1.5 } } }
+          )}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          placeholder="Enter text with placeholders like :::data.field"
+          InputProps={{
+            sx: {
+              fontFamily: mono,
+              fontSize: 13,
+              lineHeight: 1.7,
+            },
+          }}
+        />
       </Box>
 
-      {/* Body */}
-      <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
-        {/* Text area */}
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="overline" sx={{ fontSize: 10, color: 'text.disabled', letterSpacing: 1, mb: 1, display: 'block' }}>
-            Edit Value
-          </Typography>
-          <TextField
-            fullWidth
-            multiline
-            minRows={5}
-            maxRows={12}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            placeholder="Enter text with placeholders like :::data.field"
-            InputProps={{
-              sx: {
-                fontFamily: mono,
-                fontSize: 13,
-                lineHeight: 1.7,
-              },
-            }}
+      {/* Hint when unsaved */}
+      {hasChanges && (
+        <Box
+          sx={{
+            bgcolor: alpha(accent(theme), 0.06),
+            border: 1,
+            borderColor: alpha(accent(theme), 0.18),
+            borderRadius: 1.5,
+            px: 1.5,
+            py: 1,
+            mb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            fontSize: 12,
+            color: 'text.secondary',
+            flexShrink: 0,
+          }}
+        >
+          <LightbulbOutlinedIcon sx={{ fontSize: 16, color: accent(theme) }} />
+          Click "Apply to JSON" to update the JSON editor
+        </Box>
+      )}
+
+      {/* Quick insert */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 2, flexShrink: 0 }}>
+        <Typography sx={{ fontSize: 11, color: 'text.disabled', fontWeight: 500 }}>Quick Insert:</Typography>
+        {quickPlaceholders.map((p) => (
+          <Chip
+            key={p}
+            label={p}
+            size="small"
+            variant="outlined"
+            icon={<Box component="span" sx={{ fontSize: '8px !important', color: 'primary.main', ml: '4px !important' }}>◆</Box>}
+            onClick={() => insertPlaceholder(p)}
             sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 1.5,
-              },
+              fontFamily: mono,
+              fontSize: 11,
+              height: 24,
+              cursor: 'pointer',
+              '&:hover': { borderColor: accent(theme), color: accent(theme) },
             }}
           />
-        </Box>
+        ))}
+      </Box>
 
-        {/* Hint when unsaved */}
-        {hasChanges && (
-          <Box
-            sx={{
-              bgcolor: alpha(accent(theme), 0.06),
-              border: 1,
-              borderColor: alpha(accent(theme), 0.18),
-              borderRadius: 1.5,
-              px: 1.5,
-              py: 1,
-              mb: 2,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              fontSize: 12,
-              color: 'text.secondary',
-            }}
-          >
-            <LightbulbOutlinedIcon sx={{ fontSize: 16, color: accent(theme) }} />
-            Click "Apply to JSON" to update the JSON editor
+      {/* Detected placeholders */}
+      {placeholders.length > 0 && (
+        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 1.5, mb: 2, flexShrink: 0 }}>
+          <Typography sx={{ fontSize: 11, color: 'text.disabled', mb: 1, fontWeight: 500 }}>
+            Detected Placeholders:
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            {placeholders.map((p) => (
+              <Chip
+                key={p}
+                label={p}
+                size="small"
+                sx={{
+                  fontFamily: mono,
+                  fontSize: 11,
+                  height: 24,
+                  bgcolor: alpha(accent(theme), 0.08),
+                  color: theme.palette.mode === 'dark' ? '#a78bfa' : '#6d28d9',
+                }}
+              />
+            ))}
           </Box>
-        )}
-
-        {/* Quick insert */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-          <Typography sx={{ fontSize: 11, color: 'text.disabled', fontWeight: 500 }}>Quick Insert:</Typography>
-          {quickPlaceholders.map((p) => (
-            <Chip
-              key={p}
-              label={p}
-              size="small"
-              variant="outlined"
-              icon={<Box component="span" sx={{ fontSize: '8px !important', color: 'primary.main', ml: '4px !important' }}>◆</Box>}
-              onClick={() => insertPlaceholder(p)}
-              sx={{
-                fontFamily: mono,
-                fontSize: 11,
-                height: 24,
-                cursor: 'pointer',
-                '&:hover': { borderColor: accent(theme), color: accent(theme) },
-              }}
-            />
-          ))}
         </Box>
+      )}
 
-        {/* Detected placeholders */}
-        {placeholders.length > 0 && (
-          <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 1.5, mb: 2 }}>
-            <Typography sx={{ fontSize: 11, color: 'text.disabled', mb: 1, fontWeight: 500 }}>
-              Detected Placeholders:
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-              {placeholders.map((p) => (
+      {/* Preview */}
+      <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', flexShrink: 0 }}>
+        <Box
+          onClick={() => setShowPreview(!showPreview)}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            px: 1.5,
+            py: 1,
+            cursor: 'pointer',
+            borderBottom: showPreview ? 1 : 0,
+            borderColor: 'divider',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          {showPreview ? (
+            <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+          ) : (
+            <ChevronRightIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+          )}
+          <Typography variant="overline" sx={{ fontSize: 10, color: 'text.disabled', letterSpacing: 1 }}>
+            {context ? 'Resolved Preview' : 'Preview'}
+          </Typography>
+        </Box>
+        <Collapse in={showPreview}>
+          {/* Array format selector — only when context has arrays */}
+          {context && hasArrayPlaceholders && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                flexWrap: 'wrap',
+                px: 1.5,
+                pt: 1,
+                pb: 0.5,
+                borderBottom: 1,
+                borderColor: 'divider',
+              }}
+            >
+              <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 500, mr: 0.5 }}>
+                Array format:
+              </Typography>
+              {(['comma', 'newline', 'json', 'custom'] as ArrayFormat[]).map((fmt) => (
                 <Chip
-                  key={p}
-                  label={p}
+                  key={fmt}
+                  label={fmt}
                   size="small"
+                  variant={arrayFormat === fmt ? 'filled' : 'outlined'}
+                  onClick={() => setArrayFormat(fmt)}
                   sx={{
-                    fontFamily: mono,
-                    fontSize: 11,
-                    height: 24,
-                    bgcolor: alpha(accent(theme), 0.08),
-                    color: theme.palette.mode === 'dark' ? '#a78bfa' : '#6d28d9',
+                    fontSize: 10,
+                    height: 22,
+                    textTransform: 'capitalize',
+                    ...(arrayFormat === fmt && {
+                      bgcolor: alpha(accent(theme), 0.12),
+                      color: theme.palette.mode === 'dark' ? '#a78bfa' : '#6d28d9',
+                    }),
                   }}
                 />
               ))}
+              {arrayFormat === 'custom' && (
+                <TextField
+                  size="small"
+                  value={customSep}
+                  onChange={(e) => setCustomSep(e.target.value as string)}
+                  placeholder="separator"
+                  sx={{
+                    width: 80,
+                    '& .MuiOutlinedInput-root': { borderRadius: 1, height: 22 },
+                    '& .MuiInputBase-input': { fontSize: 10, fontFamily: mono, px: 0.75, py: 0 },
+                  }}
+                />
+              )}
             </Box>
+          )}
+          <Box sx={{ p: 1.5, fontSize: 13, lineHeight: 1.8 }}>
+            <PlaceholderHighlighter
+              text={editValue}
+              pattern={pattern}
+              context={context}
+              arrayFormat={arrayFormat}
+              customSeparator={customSep}
+            />
           </Box>
-        )}
-
-        {/* Preview */}
-        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
-          <Box
-            onClick={() => setShowPreview(!showPreview)}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              px: 1.5,
-              py: 1,
-              cursor: 'pointer',
-              borderBottom: showPreview ? 1 : 0,
-              borderColor: 'divider',
-              '&:hover': { bgcolor: 'action.hover' },
-            }}
-          >
-            {showPreview ? (
-              <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-            ) : (
-              <ChevronRightIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-            )}
-            <Typography variant="overline" sx={{ fontSize: 10, color: 'text.disabled', letterSpacing: 1 }}>
-              Preview
-            </Typography>
-          </Box>
-          <Collapse in={showPreview}>
-            <Box sx={{ p: 1.5, fontSize: 13, lineHeight: 1.8 }}>
-              <PlaceholderHighlighter text={editValue} pattern={pattern} />
-            </Box>
-          </Collapse>
-        </Box>
+        </Collapse>
       </Box>
     </Box>
+  );
+
+  // ── Inline (panel) view ────────────────────────────────────────────────
+
+  const inlineView = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {headerBar}
+      {bodyContent(false)}
+    </Box>
+  );
+
+  // ── Fullscreen dialog ──────────────────────────────────────────────────
+
+  return (
+    <>
+      {inlineView}
+      <Dialog
+        open={expanded}
+        onClose={() => setExpanded(false)}
+        maxWidth={false}
+        fullWidth
+        PaperProps={{
+          sx: {
+            width: '90vw',
+            height: '90vh',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            borderRadius: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          },
+        }}
+      >
+        {headerBar}
+        {bodyContent(true)}
+      </Dialog>
+    </>
   );
 };
 

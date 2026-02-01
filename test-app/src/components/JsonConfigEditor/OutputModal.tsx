@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -16,7 +16,7 @@ interface Props {
 }
 
 const OutputModal: React.FC<Props> = ({ open, config, onClose }) => {
-  const output = JSON.stringify(config);
+  const output = useMemo(() => JSON.stringify(config), [config]);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
