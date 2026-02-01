@@ -29,6 +29,7 @@ interface Props {
   context?: Record<string, unknown>;
   defaultArrayFormat?: ArrayFormat;
   customArraySeparator?: string;
+  contextDataKey?: string | null;
 }
 
 const TextFieldEditor: React.FC<Props> = ({
@@ -41,6 +42,7 @@ const TextFieldEditor: React.FC<Props> = ({
   context,
   defaultArrayFormat = 'comma',
   customArraySeparator = ' | ',
+  contextDataKey = 'data',
 }) => {
   const theme = useTheme();
   const [editValue, setEditValue] = useState(value);
@@ -69,8 +71,8 @@ const TextFieldEditor: React.FC<Props> = ({
 
   const hasArrayPlaceholders = useMemo(() => {
     if (!context) return false;
-    return placeholders.some((p) => Array.isArray(resolveValue(context, p)));
-  }, [context, placeholders]);
+    return placeholders.some((p) => Array.isArray(resolveValue(context, p, contextDataKey)));
+  }, [context, placeholders, contextDataKey]);
 
   /** Rewrite all array-valued placeholders in the text with a new format hint */
   const rewriteArrayFormats = useCallback(
@@ -79,12 +81,12 @@ const TextFieldEditor: React.FC<Props> = ({
       const re = new RegExp(pattern.source, pattern.flags);
       return text.replace(re, (fullMatch, token: string) => {
         const parsed = parsePlaceholder(token);
-        const val = resolveValue(context, parsed.name);
+        const val = resolveValue(context, parsed.name, contextDataKey);
         if (!Array.isArray(val)) return fullMatch; // only touch array placeholders
         return buildPlaceholder(parsed.name, fmt, sep);
       });
     },
-    [context, pattern],
+    [context, pattern, contextDataKey],
   );
 
   const setArrayFormat = useCallback(
@@ -376,6 +378,7 @@ const TextFieldEditor: React.FC<Props> = ({
               context={context}
               arrayFormat={arrayFormat}
               customSeparator={customSep}
+              contextDataKey={contextDataKey}
             />
           </Box>
         </Collapse>

@@ -36,6 +36,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   placeholderContext,
   defaultArrayFormat = 'comma',
   customArraySeparator = ' | ',
+  contextDataKey = 'data',
 }) => {
   const theme = useTheme();
   const [config, setConfig] = useState<Record<string, unknown>>(initialValue);
@@ -59,11 +60,11 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
 
   // Merge static quickPlaceholders with paths derived from context
   const mergedQuickPlaceholders = useMemo(() => {
-    const contextPaths = placeholderContext ? getContextPaths(placeholderContext) : [];
+    const contextPaths = placeholderContext ? getContextPaths(placeholderContext, '', contextDataKey) : [];
     const staticPaths = quickPlaceholders ?? [];
     // Deduplicate, static first then context-derived
     return [...new Set([...staticPaths, ...contextPaths])];
-  }, [quickPlaceholders, placeholderContext]);
+  }, [quickPlaceholders, placeholderContext, contextDataKey]);
 
   const filteredFields = useMemo(() => {
     let fields = editableFields;
@@ -412,6 +413,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
               context={placeholderContext}
               defaultArrayFormat={defaultArrayFormat}
               customArraySeparator={customArraySeparator}
+              contextDataKey={contextDataKey}
             />
           ) : (
             <Box

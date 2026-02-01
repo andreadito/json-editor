@@ -7,27 +7,74 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import Box from '@mui/material/Box';
 import { JsonConfigEditor } from './components/JsonConfigEditor';
 
+// Context uses the nested { data: { ... }, lastUpdatedAt, lastUpdateFrom } shape.
+// Placeholders reference paths WITHOUT the "data" key:
+//   :::auth.token  →  sampleContext.auth.data.token
+//   :::user.firstName  →  sampleContext.user.data.firstName
 const sampleContext = {
-  auth: { token: 'eyJhbGciOiJIUzI1NiJ9...' },
-  request: { id: 'req-7f3a-b82c' },
+  auth: {
+    data: { token: 'eyJhbGciOiJIUzI1NiJ9...' },
+    lastUpdatedAt: '2026-01-30T08:00:00Z',
+    lastUpdateFrom: 'login-service',
+  },
+  request: {
+    data: { id: 'req-7f3a-b82c' },
+    lastUpdatedAt: '2026-02-01T10:29:00Z',
+    lastUpdateFrom: 'gateway',
+  },
   user: {
-    firstName: 'Andrea',
-    name: 'Andrea D.',
-    email: 'andrea@example.com',
-    address: { street: '123 Main St', city: 'Milan' },
+    data: {
+      firstName: 'Andrea',
+      name: 'Andrea D.',
+      email: 'andrea@example.com',
+      address: { street: '123 Main St', city: 'Milan' },
+    },
+    lastUpdatedAt: '2026-01-28T14:00:00Z',
+    lastUpdateFrom: 'profile-service',
   },
-  order: { id: 'ORD-44821' },
-  delivery: { estimatedDate: '2026-02-05' },
-  system: { currentTime: '2026-02-01T10:30:00Z', date: '2026-02-01' },
+  order: {
+    data: { id: 'ORD-44821' },
+    lastUpdatedAt: '2026-02-01T09:15:00Z',
+    lastUpdateFrom: 'order-service',
+  },
+  delivery: {
+    data: { estimatedDate: '2026-02-05' },
+    lastUpdatedAt: '2026-02-01T09:20:00Z',
+    lastUpdateFrom: 'logistics',
+  },
+  system: {
+    data: { currentTime: '2026-02-01T10:30:00Z', date: '2026-02-01' },
+    lastUpdatedAt: '2026-02-01T10:30:00Z',
+    lastUpdateFrom: 'system-clock',
+  },
   recipient: {
-    primary: { email: 'primary@example.com' },
-    cc: { email: 'cc@example.com' },
+    data: {
+      primary: { email: 'primary@example.com' },
+      cc: { email: 'cc@example.com' },
+    },
+    lastUpdatedAt: '2026-01-25T12:00:00Z',
+    lastUpdateFrom: 'contact-service',
   },
-  deep: { placeholder: 'resolved-deep-value' },
-  error: { code: 'E-5001', details: 'Connection timeout on node-3' },
-  data: { id: 'DATA-99', field: 'sample-field' },
-  instruments: ['AAPL', 'MSFT', 'GOOG', 'AMZN'],
-  prices: [142.5, 338.2, 175.8, 185.1],
+  deep: {
+    data: { placeholder: 'resolved-deep-value' },
+    lastUpdatedAt: '2026-01-20T10:00:00Z',
+    lastUpdateFrom: 'deep-service',
+  },
+  error: {
+    data: { code: 'E-5001', details: 'Connection timeout on node-3' },
+    lastUpdatedAt: '2026-02-01T10:28:00Z',
+    lastUpdateFrom: 'error-handler',
+  },
+  instruments: {
+    data: ['AAPL', 'MSFT', 'GOOG', 'AMZN'],
+    lastUpdatedAt: '2026-02-01T10:00:00Z',
+    lastUpdateFrom: 'market-feed',
+  },
+  prices: {
+    data: {values: [142.5, 338.2, 175.8, 185.1]},
+    lastUpdatedAt: '2026-02-01T10:00:00Z',
+    lastUpdateFrom: 'market-feed',
+  },
 };
 
 const sampleConfig = {
