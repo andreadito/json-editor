@@ -9,6 +9,7 @@ import Chip from '@mui/material/Chip';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import SaveIcon from '@mui/icons-material/Save';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -25,6 +26,7 @@ const DEFAULT_PLACEHOLDER_REGEX = /:::([\w.]+)/g;
 
 const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   initialValue,
+  onSave,
   onChange,
   onExport,
   placeholderPattern = DEFAULT_PLACEHOLDER_REGEX,
@@ -40,6 +42,11 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [jsonText, setJsonText] = useState(() => JSON.stringify(initialValue, null, 2));
+
+  // Track dirty state: config has diverged from initialValue (or last save)
+  const [savedConfig, setSavedConfig] = useState<Record<string, unknown>>(initialValue);
+  const isDirty = useMemo(() => JSON.stringify(config) !== JSON.stringify(savedConfig), [config, savedConfig]);
+  const [justSavedGlobal, setJustSavedGlobal] = useState(false);
 
   // Track whether a config change came from the code editor (don't reformat)
   // vs. from the field editor / reset (do reformat and push into CodeMirror)
@@ -84,10 +91,19 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
     setJsonError(null);
   }, [config]);
 
-  // Notify parent
+  // Optionally notify parent on every change (live mode)
   useEffect(() => {
     onChange?.(config);
   }, [config, onChange]);
+
+  const handleSaveClick = useCallback(() => {
+    if (jsonError) return;
+    onSave?.(config);
+    setSavedConfig(config);
+    setJustSavedGlobal(true);
+    const t = setTimeout(() => setJustSavedGlobal(false), 2000);
+    return () => clearTimeout(t);
+  }, [config, jsonError, onSave]);
 
   const handleJsonChange = useCallback((text: string) => {
     setJsonText(text);
@@ -122,6 +138,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   const handleReset = useCallback(() => {
     // This comes from the reset button — let the effect reformat
     setConfig(initialValue);
+    setSavedConfig(initialValue);
     setSelectedField(null);
   }, [initialValue]);
 
@@ -154,7 +171,14 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
           </Box>
           <Typography sx={{ fontSize: 15, fontWeight: 600 }}>{title}</Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {justSavedGlobal && (
+            <Chip
+              label="✓ Saved"
+              size="small"
+              sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontSize: 10, height: 22, fontWeight: 600 }}
+            />
+          )}
           <Button
             size="small"
             variant="outlined"
@@ -164,12 +188,39 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
           >
             Reset
           </Button>
+          {onSave && (
+            <Button
+              size="small"
+              variant="contained"
+              disabled={!isDirty || !!jsonError}
+              startIcon={<SaveIcon sx={{ fontSize: '16px !important' }} />}
+              onClick={handleSaveClick}
+              sx={{
+                textTransform: 'none',
+                fontSize: 12,
+                background: isDirty && !jsonError ? accentGradient(theme) : undefined,
+                ...(isDirty && !jsonError && {
+                  animation: 'headerPulse 1.5s ease-in-out infinite',
+                  '@keyframes headerPulse': {
+                    '0%, 100%': { boxShadow: `0 0 0 0 ${alpha(accent(theme), 0.4)}` },
+                    '50%': { boxShadow: `0 0 0 6px ${alpha(accent(theme), 0)}` },
+                  },
+                }),
+              }}
+            >
+              {isDirty ? 'Save' : 'Saved'}
+            </Button>
+          )}
           <Button
             size="small"
-            variant="contained"
+            variant={onSave ? 'outlined' : 'contained'}
             startIcon={<DataObjectIcon sx={{ fontSize: '16px !important' }} />}
             onClick={handleExport}
-            sx={{ textTransform: 'none', fontSize: 12, background: accentGradient(theme) }}
+            sx={{
+              textTransform: 'none',
+              fontSize: 12,
+              ...(!onSave && { background: accentGradient(theme) }),
+            }}
           >
             Get Output
           </Button>

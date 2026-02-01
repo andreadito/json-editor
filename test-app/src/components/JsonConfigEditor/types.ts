@@ -11,7 +11,9 @@ export type FieldFilter = 'all' | 'placeholders' | 'long';
 export interface JsonConfigEditorProps {
   /** Initial JSON configuration object */
   initialValue: Record<string, unknown>;
-  /** Called whenever the config changes (from either the code editor or field editor) */
+  /** Called when user explicitly clicks "Save" in the header. Use this for on-demand persistence. */
+  onSave?: (config: Record<string, unknown>) => void;
+  /** Called whenever the config changes (every edit). Optional — omit for on-demand-only via onSave. */
   onChange?: (config: Record<string, unknown>) => void;
   /** Called when user clicks "Get Stringified Output" */
   onExport?: (jsonString: string) => void;

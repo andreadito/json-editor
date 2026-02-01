@@ -90,8 +90,8 @@ function App() {
 
       <JsonConfigEditor
         initialValue={sampleConfig}
-        onChange={(config) => console.log('[onChange]', config)}
-        title="Trading Config Editor"
+        onSave={(config) => console.log('[onSave]', config)}
+        title="JSON Editor"
         height="100vh"
       />
     </ThemeProvider>
