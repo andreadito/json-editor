@@ -272,6 +272,9 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
               <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
                 JSON Configuration
               </Typography>
+              <Typography sx={{ fontSize: 11, color: 'text.disabled', fontStyle: 'italic' }}>
+                Click underlined keys to edit
+              </Typography>
             </Box>
             <Chip
               label={jsonError ? 'Invalid JSON' : 'Valid JSON'}
@@ -308,7 +311,16 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
 
           {/* Code editor */}
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <JsonCodeEditor value={jsonText} onChange={handleJsonChange} hasError={!!jsonError} />
+            <JsonCodeEditor
+              value={jsonText}
+              onChange={handleJsonChange}
+              hasError={!!jsonError}
+              editableFields={editableFields}
+              onFieldClick={(path) => {
+                const field = editableFields.find((f) => f.path === path);
+                if (field) setSelectedField(field);
+              }}
+            />
           </Box>
         </Box>
 
@@ -355,7 +367,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
                 No field selected
               </Typography>
               <Typography sx={{ fontSize: 12, color: 'text.disabled', lineHeight: 1.6 }}>
-                Click on a text field in the sidebar to edit it with placeholder support
+                Click a field in the sidebar or an underlined key in the JSON editor to open it here
               </Typography>
             </Box>
           )}
