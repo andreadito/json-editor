@@ -15,7 +15,7 @@ import EditNoteIcon from '@mui/icons-material/EditNote';
 import { alpha, useTheme } from '@mui/material/styles';
 
 import type { JsonConfigEditorProps, EditableField, FieldFilter } from './types';
-import { findEditableFields, setValueAtPath } from './utils';
+import { findEditableFields, setValueAtPath, getContextPaths } from './utils';
 import { accent, accentGradient, containerSx, headerSx, sidebarSx, mono } from './theme';
 import FieldCard from './FieldCard';
 import JsonCodeEditor from './JsonCodeEditor';
@@ -56,6 +56,14 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
   const changeFromCodeEditor = useRef(false);
 
   const editableFields = useMemo(() => findEditableFields(config, '', placeholderPattern), [config, placeholderPattern]);
+
+  // Merge static quickPlaceholders with paths derived from context
+  const mergedQuickPlaceholders = useMemo(() => {
+    const contextPaths = placeholderContext ? getContextPaths(placeholderContext) : [];
+    const staticPaths = quickPlaceholders ?? [];
+    // Deduplicate, static first then context-derived
+    return [...new Set([...staticPaths, ...contextPaths])];
+  }, [quickPlaceholders, placeholderContext]);
 
   const filteredFields = useMemo(() => {
     let fields = editableFields;
@@ -400,7 +408,7 @@ const JsonConfigEditor: React.FC<JsonConfigEditorProps> = ({
               onSave={handleFieldSave}
               onCancel={() => setSelectedField(null)}
               pattern={placeholderPattern}
-              quickPlaceholders={quickPlaceholders}
+              quickPlaceholders={mergedQuickPlaceholders}
               context={placeholderContext}
               defaultArrayFormat={defaultArrayFormat}
               customArraySeparator={customArraySeparator}

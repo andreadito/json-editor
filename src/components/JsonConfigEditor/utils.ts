@@ -119,6 +119,30 @@ export function formatResolved(
 }
 
 /**
+ * Extract all dot-paths from a context object (leaf values only).
+ * E.g. { user: { name: "A", address: { city: "M" } }, items: [1,2] }
+ * → ["user.name", "user.address.city", "items"]
+ */
+export function getContextPaths(obj: unknown, prefix = ''): string[] {
+  const paths: string[] = [];
+  if (obj == null || typeof obj !== 'object') return paths;
+  if (Array.isArray(obj)) {
+    // Arrays are treated as leaf values (the user inserts :::items, not :::items.0)
+    if (prefix) paths.push(prefix);
+    return paths;
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value != null && typeof value === 'object' && !Array.isArray(value)) {
+      paths.push(...getContextPaths(value, path));
+    } else {
+      paths.push(path);
+    }
+  }
+  return paths;
+}
+
+/**
  * Resolve all placeholders in a text string against a context object,
  * returning the full string with placeholders replaced by their resolved values.
  */
